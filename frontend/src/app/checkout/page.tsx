@@ -1,0 +1,1 @@
+import {Checkout} from '@/components/commerce';import {get} from '@/lib/server';import {Site} from '@/lib/types';export const metadata={title:'Secure Checkout',robots:{index:false,follow:false}};export default async function Page(){return <Checkout site={await get<Site>('site/')}/>}

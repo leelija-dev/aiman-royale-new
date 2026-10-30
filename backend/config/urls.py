@@ -1,0 +1,8 @@
+from django.contrib import admin
+from django.urls import path
+from django.conf import settings
+from django.conf.urls.static import static
+from django.contrib.auth import views as auth_views
+from shop import api
+urlpatterns=[path('admin/',admin.site.urls),path('api/csrf/',api.csrf),path('api/site/',api.site),path('api/products/',api.products),path('api/products/<slug:slug>/',api.products),path('api/collections/<slug:slug>/',api.collection),path('api/auth/me/',api.me),path('api/auth/register/',api.register),path('api/auth/login/',api.sign_in),path('api/auth/logout/',api.sign_out),path('api/auth/otp/send/',api.otp_send),path('api/auth/otp/verify/',api.otp_verify),path('api/cart/',api.cart),path('api/wishlist/',api.wishlist),path('api/quote/',api.quote),path('api/checkout/',api.checkout),path('api/payments/verify/',api.verify_payment),path('api/payments/webhook/',api.payment_webhook),path('api/orders/',api.orders),path('api/appointments/slots/',api.slots),path('api/appointments/',api.book),path('api/appointments/mine/',api.appointments),path('api/subscribe/',api.subscribe),path('api/pages/<slug:slug>/',api.page),path('api/health/',api.health),path('accounts/password_reset/',auth_views.PasswordResetView.as_view(),name='password_reset'),path('accounts/password_reset/done/',auth_views.PasswordResetDoneView.as_view(),name='password_reset_done'),path('accounts/reset/<uidb64>/<token>/',auth_views.PasswordResetConfirmView.as_view(),name='password_reset_confirm'),path('accounts/reset/done/',auth_views.PasswordResetCompleteView.as_view(),name='password_reset_complete')]
+if settings.DEBUG:urlpatterns+=static(settings.MEDIA_URL,document_root=settings.MEDIA_ROOT)

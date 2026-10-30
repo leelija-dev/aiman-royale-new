@@ -1,0 +1,1 @@
+import Link from 'next/link';export default function NotFound(){return <section className="section empty"><p className="eyebrow">AIMAN ROYALE</p><h1>This page is not available.</h1><p>Let’s find something beautiful instead.</p><Link className="button" href="/products">Explore the Collection</Link></section>}

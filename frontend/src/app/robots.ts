@@ -1,0 +1,1 @@
+import {MetadataRoute} from 'next';import {origin} from '@/lib/server';export default function robots():MetadataRoute.Robots{return {rules:{userAgent:'*',allow:'/',disallow:['/account','/cart','/checkout','/login','/register','/wishlist','/api/','/admin/','/accounts/']},sitemap:`${origin}/sitemap.xml`};}

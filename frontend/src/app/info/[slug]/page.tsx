@@ -1,0 +1,3 @@
+import {get} from '@/lib/server';import {notFound} from 'next/navigation';
+export async function generateMetadata({params}:{params:Promise<{slug:string}>}){const {slug}=await params;try{const p=await get<{title:string}>(`pages/${slug}/`);return {title:p.title};}catch{return {title:'Store Information',robots:{index:false}}}}
+export default async function Page({params}:{params:Promise<{slug:string}>}){const {slug}=await params;let p:{title:string;body:string};try{p=await get(`pages/${slug}/`);}catch(e){if(e instanceof Error&&e.message==='Not found')notFound();throw e;}return <article className="section prose"><p className="eyebrow">AIMAN ROYALE · HERE TO HELP</p><h1>{p.title}</h1><div style={{whiteSpace:'pre-wrap'}}>{p.body}</div></article>}

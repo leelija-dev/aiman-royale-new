@@ -1,0 +1,11 @@
+export type Collection={id:number;name:string;slug:string;description:string;image:string;seo_title:string;seo_description:string};
+export type Variant={id:number;sku:string;size:string;colour:string;stock:number};
+export type Product={id:number;name:string;slug:string;description:string;care:string;fabric:string;occasions:string[];price:string;mrp:string;featured:boolean;custom_fit:boolean;images:{id:number;url:string;alt:string}[];variants:Variant[];collections:Collection[];seo_title:string;seo_description:string;updated_at:string};
+export type ProductPage={count:number;page:number;pages:number;results:Product[]};
+export type Site={name:string;announcement:string;hero_title:string;hero_description:string;hero_image:string;phone:string;email:string;address:string;cod_enabled:boolean;payment_ready:boolean;whatsapp_ready:boolean;collections:Collection[]};
+export type CartItem={id:number;variant:Variant;product:Product;quantity:number;measurements:Record<string,string>};
+export type Bag={items:CartItem[];subtotal:string};
+export type User={id:number;name:string;email:string;phone:string|null};
+export type Order={id:string;status:string;subtotal:string;discount:string;shipping:string;total:string;gateway_order_id:string;tracking_url:string;created_at:string;items:{name:string;unit_price:string;quantity:number;size:string;colour:string}[]};
+export const money=(n:string|number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(Number(n));
+export const photo=(p:Product)=>p.images[0]?.url||'/images/collection.webp';
