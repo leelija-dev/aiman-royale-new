@@ -5,3 +5,158 @@
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{transition:none!important;animation:none!important}}@media(max-width:380px){.brand{font-size:21px}.header-actions .icon{padding:5px}.collection-card{height:240px}.bag-item{grid-template-columns:85px 1fr}.bag-item>strong{grid-column:2}.bag-item>a img{width:85px}.size-buttons{gap:7px}.size-buttons button{padding:9px 12px}}
 /* Keep the reference image's baked-in caption outside the live-text image frame. */
 .hero-image,.auth-image{overflow:hidden}.hero-image>img,.auth-image>img{object-position:top center;transform:scale(1.45);transform-origin:top center}
+/* Homepage reference: compact editorial sections, ivory canvas and burgundy accents. */
+.royale-home{background:#fcf6ed;font-family:Georgia,'Times New Roman',serif}
+.royale-home p{color:#746456}
+.luxury-hero{position:relative;aspect-ratio:3.8;min-height:330px;overflow:hidden;background:#e7d3b5}
+.luxury-hero>img{object-position:center}
+.luxury-hero>div{position:relative;z-index:1;padding:5.5% 8%;width:55%;background:linear-gradient(90deg,#fff0d970,transparent)}
+.luxury-hero h1{font-size:clamp(38px,5.5vw,84px);color:var(--wine);line-height:1;letter-spacing:-2px;margin:0 0 25px}
+.luxury-hero .button{font-family:Georgia,serif;min-width:160px}
+.home-wrap{max-width:1500px;margin:auto;padding:0 3.3%}
+.home-wrap>section{margin:20px 0}
+.home-four{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.home-edit-card{position:relative;display:block;aspect-ratio:1.55;background:#e7d8c6;overflow:hidden}
+.home-edit-card img{object-position:center 25%;transition:transform .3s}
+.home-edit-card:hover img{transform:scale(1.025)}
+.home-edit-card:after{content:'';position:absolute;inset:35% 0 0;background:linear-gradient(transparent,#23150cb3)}
+.home-edit-card>div{position:absolute;bottom:10px;left:15px;right:8px;z-index:1;color:white}
+.home-edit-card h3{font-size:clamp(16px,1.8vw,26px);margin:0}
+.home-edit-card span{font-size:12px}
+.home-heading{text-align:center;margin:16px 0 12px}
+.home-heading h2{font-size:clamp(24px,2.6vw,36px);margin:0 0 3px;color:#3d2722}
+.home-heading p{font-size:13px;margin:0}
+.mini-collections>a{display:flex;background:#eee4d7;align-items:center;min-width:0}
+.mini-collections img{width:49%;height:auto;aspect-ratio:1;object-position:center 20%}
+.mini-collections> a>div{padding:10px}
+.mini-collections h3{font-size:18px;margin:0 0 8px}
+.mini-collections small{font-size:8px;letter-spacing:1px}
+.mini-collections span{font-size:9px}
+.mini-collections+.center{margin-top:12px}
+.home-row-title{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:12px}
+.home-row-title h2{font-size:28px;color:var(--wine);margin:0}
+.home-row-title p{font-size:12px;margin:0}
+.royale-home .product-grid{gap:14px}
+.royale-home .product-card{border:1px solid #eee2d6;background:#fffaf3;min-width:0;padding-bottom:8px}
+.royale-home .product-photo{aspect-ratio:1.4}
+.royale-home .product-photo img{object-position:center 23%}
+.royale-home .product-card h3{font-size:14px;margin:3px 10px;line-height:1.5;letter-spacing:0}
+.royale-home .product-category{margin:7px 10px 0;font-size:10px}
+.royale-home .product-card .price{margin:5px 10px;font-size:13px;color:var(--wine)}
+.royale-home .price del{font-size:10px}
+.royale-home .product-colours,.royale-home .product-tag{display:none}
+.home-confidence{display:grid;grid-template-columns:2.7fr 1fr 1fr 1fr;align-items:center;gap:20px;padding:22px 5%;background:#f6e5df}
+.home-confidence h2{font-size:30px;color:var(--wine);margin:0}
+.home-confidence p{font-size:12px;margin:0}
+.home-confidence>span{font-size:12px;text-align:center;padding:0 20px;border-left:1px solid #dfc9c2;line-height:1.4}
+.home-confidence svg{display:block;margin:0 auto 7px;color:#874557;width:28px;height:28px}
+.home-confidence small{font-size:9px}
+.wedding-mosaic{display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr;grid-template-rows:160px 170px;gap:8px}
+.wedding-mosaic .home-edit-card{aspect-ratio:auto}
+.wedding-mosaic>a:first-child{grid-row:span 2}
+.wedding-mosaic>a:nth-child(2){grid-column:span 2}
+.wedding-mosaic h3{font-size:20px}
+.wedding-mosaic>a:first-child h3{font-size:32px}
+.home-sale{position:relative;text-align:center;background:var(--wine);padding:22px;color:#fff1de;overflow:hidden;min-height:170px}
+.home-sale>img{opacity:.13}
+.home-sale>div{position:relative}
+.home-sale h2{font-size:32px;margin:2px}
+.home-sale p{color:#ffeadb;font-size:13px;margin:0}
+.home-sale .button{color:#fff1de;border-color:#ce9e9b;padding:6px 25px;min-height:30px;margin-top:9px}
+.style-strip{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;text-align:center}
+.style-strip img{width:100%;aspect-ratio:1.1;height:auto;object-position:top}
+.style-strip h3{font-size:12px;margin:3px 0}
+.style-strip span{font-size:10px;text-decoration:underline}
+.home-benefits{display:grid;grid-template-columns:repeat(4,1fr);padding:16px 0;gap:20px;border-bottom:1px solid #eee1d4}
+.home-benefits>div{display:flex;gap:16px;align-items:center;border-right:1px solid #e9dcd1}
+.home-benefits>div:last-child{border:0}
+.home-benefits svg{color:#944858;width:30px;height:30px}
+.home-benefits strong{font-size:12px;font-weight:400}
+.home-benefits small{font-size:10px}
+.home-consult{display:grid;grid-template-columns:1fr 1.1fr;gap:20px;background:#f5e9dd;padding:0 0 12px}
+.consult-photo{position:relative;min-height:320px}
+.home-consult>div:nth-child(2){padding:12px 15px 0 0}
+.home-consult h2{font-size:26px;margin:0}
+.home-consult p{font-size:12px;margin:0 0 12px}
+.consult-options{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.consult-options article{background:#fff9f0;padding:16px;border:1px solid #eadbcf;display:flex;flex-direction:column}
+.consult-options small{font-size:9px;color:var(--wine)}
+.consult-options h3{font-size:18px;color:var(--wine);margin:5px 0 10px}
+.consult-options ul{font-size:11px;padding-left:15px;margin:0 0 15px;color:#736153}
+.consult-options .button{padding:8px;min-height:36px;font-size:10px;margin-top:auto}
+.designer-notes{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.designer-notes article{background:#f0e5d7;padding:18px}
+.designer-notes h3{font-size:18px;margin:0 0 8px}
+.designer-notes p{font-size:12px;line-height:1.5;margin:0 0 12px}
+.designer-notes strong{font-size:11px}
+.home-story h2{font-size:22px;color:var(--wine);margin:0}
+.home-story p{font-size:12px;line-height:1.6}
+.newsletter{background:#f3e6d7;padding-top:28px;padding-bottom:28px}
+.newsletter h2{font-family:Georgia,serif;font-size:28px}
+footer{background:#500e20;color:#fff1df}
+footer p,footer a,footer h4,footer .brand em{color:#f7e6dc}
+.footer-bottom{border-color:#834653}
+.header{height:65px;background:#fcf6ed}
+.announcement{padding:4px 3%}
+.nav{font-family:Georgia,serif}
+.announcement span{display:none}
+
+@media(max-width:900px){.luxury-hero{min-height:300px}
+.luxury-hero>div{padding:9% 5%;width:58%}
+.mini-collections h3{font-size:14px}
+.mini-collections span{display:none}
+.home-confidence{grid-template-columns:repeat(3,1fr);gap:14px}
+.home-confidence>div{grid-column:1/-1;text-align:center}
+.home-confidence>span{border:0}
+.home-consult{grid-template-columns:1fr}
+.consult-photo{min-height:300px}
+.home-consult>div:nth-child(2){padding:10px 18px}
+.style-strip{grid-template-columns:repeat(4,1fr);gap:16px 8px}
+.home-benefits{grid-template-columns:1fr 1fr}
+.nav{top:65px}
+.wedding-mosaic{grid-template-rows:130px 140px}
+}
+
+@media(max-width:600px){.luxury-hero{min-height:370px;aspect-ratio:auto}
+.luxury-hero>img{object-position:64% center}
+.luxury-hero>div{width:100%;padding:24px 5% 28px;background:linear-gradient(90deg,#fff1dbeb,#fff1db88 40%,transparent 70%)}
+.luxury-hero h1{font-size:38px;max-width:240px;margin-bottom:15px;letter-spacing:-1px}
+.luxury-hero .button{min-width:125px;font-size:10px;padding:8px 15px;min-height:38px}
+.home-wrap{padding:0 4%}
+.home-four{grid-template-columns:1fr 1fr;gap:10px}
+.home-wrap>section{margin:20px 0}
+.home-edit-card{aspect-ratio:1.1}
+.home-edit-card>div{left:10px;bottom:9px}
+.home-edit-card h3{font-size:20px}
+.home-heading h2{font-size:26px}
+.home-heading p{font-size:11px}
+.mini-collections h3{font-size:16px}
+.mini-collections>a>div{padding:6px}
+.home-row-title h2{font-size:24px}
+.home-row-title>.underlink{font-size:10px;white-space:nowrap}
+.royale-home .product-grid{gap:12px}
+.royale-home .product-photo{aspect-ratio:.85}
+.royale-home .product-card h3{font-size:13px}
+.royale-home .product-card .price{font-size:12px}
+.home-confidence{padding:18px 4%;gap:12px}
+.home-confidence h2{font-size:27px}
+.home-confidence>span{padding:0;font-size:10px}
+.wedding-mosaic{grid-template-columns:repeat(2,1fr);grid-template-rows:230px 150px 150px;gap:8px}
+.wedding-mosaic>a:first-child{grid-row:auto;grid-column:1/-1}
+.wedding-mosaic>a:nth-child(2){grid-column:auto}
+.wedding-mosaic>a:last-child{display:none}
+.home-sale h2{font-size:28px}
+.style-strip{grid-template-columns:repeat(4,1fr)}
+.style-strip h3{font-size:11px}
+.home-benefits{gap:12px}
+.home-benefits>div{border:0;gap:8px}
+.home-benefits small{font-size:9px}
+.home-consult h2{font-size:26px}
+.consult-options{grid-template-columns:1fr}
+.consult-options article{padding:20px}
+.consult-options .button{font-size:12px}
+.designer-notes{grid-template-columns:1fr;gap:10px}
+.home-story h2{font-size:21px}
+.newsletter h2{font-size:27px}
+.header{height:65px}
+}
