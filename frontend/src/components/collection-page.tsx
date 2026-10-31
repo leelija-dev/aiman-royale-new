@@ -5,15 +5,9 @@ import {useRouter} from 'next/navigation';
 import {useState} from 'react';
 import {Heart, ChevronUp, ArrowDown, ArrowUpRight, LayoutGrid, List} from 'lucide-react';
 import {api, err} from '@/lib/client';
-import {Product, ProductPage, money, photo} from '@/lib/types';
+import {Product, ProductPage, Facets, money, photo} from '@/lib/types';
 import type {MenuLink} from '@/lib/menu';
-import {type Query, OCCASIONS, list, toParams} from '@/lib/query';
-
-const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
-const COLOURS: [string, string][] = [
-  ['Maroon', '#6b1426'], ['Rani Pink', '#d6246e'], ['Rose Gold', '#c9877d'], ['Copper', '#b8642f'],
-  ['Wine', '#5c0f2e'], ['Purple', '#4b2a7a'], ['Green', '#3f6b4a'], ['Navy', '#24315e'],
-];
+import {type Query, list, toParams} from '@/lib/query';
 
 /* ---------- Filters sidebar ---------- */
 function Group({title, children}: {title: string; children: React.ReactNode}) {
@@ -24,7 +18,7 @@ function Group({title, children}: {title: string; children: React.ReactNode}) {
   </div>;
 }
 
-export function Filters({base, query, styles}: {base: string; query: Query; styles: MenuLink[]}) {
+export function Filters({base, query, styles, facets}: {base: string; query: Query; styles: MenuLink[]; facets: Facets}) {
   const router = useRouter();
   const go = (p: URLSearchParams) => { p.delete('page'); router.push(`${base}${p.size ? `?${p}` : ''}#collection`, {scroll: false}); };
   const toggle = (key: string, value: string) => {
@@ -37,17 +31,18 @@ export function Filters({base, query, styles}: {base: string; query: Query; styl
   const [open, setOpen] = useState(false);
   return <aside className={open ? 'cp-filters open' : 'cp-filters'} aria-label="Filters">
     <div className="cp-filters-head"><h2><button type="button" className="cp-filter-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>Filters<ChevronUp size={18} className={open ? '' : 'flip'}/></button></h2>{active && <Link href={`${base}#collection`} scroll={false}>Clear all</Link>}</div>
-    <Group title="Occasion">{OCCASIONS.map(o => <label key={o} className="cp-check"><input type="checkbox" checked={has('occasion', o)} onChange={() => toggle('occasion', o)}/>{o}</label>)}</Group>
-    <Group title="Size"><div className="cp-sizes">{SIZES.map(s => <button type="button" key={s} aria-pressed={has('size', s)} className={has('size', s) ? 'on' : ''} onClick={() => toggle('size', s)}>{s}</button>)}</div></Group>
-    <Group title="Colour">{COLOURS.map(([c, hex]) => <button type="button" key={c} className={has('colour', c) ? 'cp-colour on' : 'cp-colour'} aria-pressed={has('colour', c)} onClick={() => toggle('colour', c)}><span style={{background: hex}}/>{c}</button>)}</Group>
+    {facets.occasions.length > 0 && <Group title="Occasion">{facets.occasions.filter(o => o.count || has('occasion', o.slug)).map(o => <label key={o.slug} className="cp-check"><input type="checkbox" checked={has('occasion', o.slug)} onChange={() => toggle('occasion', o.slug)}/>{o.name}<span className="cp-count">{o.count}</span></label>)}</Group>}
+    {facets.sizes.length > 0 && <Group title="Size"><div className="cp-sizes">{facets.sizes.map(s => <button type="button" key={s} aria-pressed={has('size', s)} className={has('size', s) ? 'on' : ''} onClick={() => toggle('size', s)}>{s}</button>)}</div></Group>}
+    {facets.colours.length > 0 && <Group title="Colour">{facets.colours.map(c => <button type="button" key={c.name} className={has('colour', c.name) ? 'cp-colour on' : 'cp-colour'} aria-pressed={has('colour', c.name)} onClick={() => toggle('colour', c.name)}><span style={{background: c.hex}}/>{c.name}<em className="cp-count">{c.count}</em></button>)}</Group>}
     <Group title="Price">
       <form className="cp-price" onSubmit={e => { e.preventDefault(); const f = new FormData(e.currentTarget); const p = toParams(query); for (const k of ['min', 'max']) { p.delete(k); const v = String(f.get(k) || '').trim(); if (v) p.set(k, v); } go(p); }}>
-        <input name="min" type="number" min={0} inputMode="numeric" placeholder="Min (₹)" aria-label="Minimum price" defaultValue={list(query.min)[0]}/>
-        <input name="max" type="number" min={0} inputMode="numeric" placeholder="Max (₹)" aria-label="Maximum price" defaultValue={list(query.max)[0]}/>
+        <input name="min" type="number" min={0} inputMode="numeric" placeholder={`Min ₹${Math.floor(Number(facets.price.min))}`} aria-label="Minimum price" defaultValue={list(query.min)[0]}/>
+        <input name="max" type="number" min={0} inputMode="numeric" placeholder={`Max ₹${Math.ceil(Number(facets.price.max))}`} aria-label="Maximum price" defaultValue={list(query.max)[0]}/>
         <button className="button outline small">Apply</button>
       </form>
+      {Number(facets.price.max) > 0 && <p className="cp-range">{money(facets.price.min)} – {money(facets.price.max)}</p>}
     </Group>
-    <Group title="Collection">{styles.map(s => <Link key={s.href} href={s.href} className="cp-collection-link">{s.label}</Link>)}</Group>
+    {styles.length > 0 && <Group title="Collection">{styles.map(s => <Link key={s.href} href={s.href} className="cp-collection-link">{s.label}</Link>)}</Group>}
     <Link href="/info/size-guide" className="cp-size-guide">Size Guide <ArrowUpRight size={16}/></Link>
   </aside>;
 }

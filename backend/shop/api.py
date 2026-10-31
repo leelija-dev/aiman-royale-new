@@ -8,7 +8,8 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from django.db import transaction,IntegrityError
-from django.db.models import Q
+from django.db.models import Q,Count,Min,Max
+from django.utils.text import slugify
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
@@ -51,10 +52,51 @@ def merge_cart(request,old_key):
 @api_view(['GET'])
 def site(request):
     s=SiteSettings.current()
-    return Response({'name':s.name,'announcement':s.announcement,'hero_title':s.hero_title,'hero_description':s.hero_description,'hero_image':s.hero_image.url if s.hero_image else '/images/hero.webp','phone':s.phone,'email':s.email,'address':s.address,'cod_enabled':s.cod_enabled,'payment_ready':bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY),'whatsapp_ready':bool(settings.WHATSAPP_TOKEN and settings.WHATSAPP_PHONE_ID and settings.WHATSAPP_OTP_TEMPLATE and settings.WHATSAPP_GRAPH_VERSION),'collections':CollectionSerializer(Collection.objects.filter(active=True),many=True).data})
+    return Response({'name':s.name,'announcement':s.announcement,'hero_title':s.hero_title,'hero_description':s.hero_description,'hero_image':s.hero_image.url if s.hero_image else '/images/hero.webp','phone':s.phone,'email':s.email,'address':s.address,'cod_enabled':s.cod_enabled,'payment_ready':bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY),'whatsapp_ready':bool(settings.WHATSAPP_TOKEN and settings.WHATSAPP_PHONE_ID and settings.WHATSAPP_OTP_TEMPLATE and settings.WHATSAPP_GRAPH_VERSION),'collections':CollectionSerializer(Collection.objects.filter(active=True),many=True).data,'menu':menu_data(),'occasions':[occasion_data(o) for o in Occasion.objects.filter(active=True)]})
+SIZE_ORDER=['XXS','XS','S','M','L','XL','XXL','2XL','3XL','4XL','5XL','FREE']
+def media_url(f):return f.url if f else ''
+def occasion_data(o,count=None):
+    d={'name':o.name,'slug':o.slug,'image':media_url(o.image)}
+    if count is not None:d['count']=count
+    return d
+def menu_data():
+    """Main menu for the header, managed in admin (Menu items)."""
+    occasions=list(Occasion.objects.filter(active=True))
+    items=[]
+    for m in MenuItem.objects.filter(active=True).prefetch_related('links'):
+        groups={'Style':[],'Occasion':[],'Collection':[]}
+        for l in m.links.all():groups[l.group].append({'label':l.label,'href':l.url})
+        if m.show_occasions:
+            sep='&' if '?' in m.url else '?'
+            groups['Occasion']+= [{'label':o.name,'href':f'{m.url}{sep}occasion={o.slug}'} for o in occasions]
+        items.append({'label':m.label,'href':m.url,'columns':[{'title':t,'links':ls} for t,ls in groups.items() if ls],
+                      'feature':{'title':m.feature_title or m.label,'image':media_url(m.feature_image),'href':m.feature_url or m.url}})
+    return items
+@api_view(['GET'])
+def facets(request):
+    """Filter options built from the products that actually exist in a collection (or the whole store)."""
+    base=Product.objects.filter(active=True)
+    if request.query_params.get('collection'):base=base.filter(collections__slug=request.query_params['collection'])
+    ids=list(base.values_list('id',flat=True).distinct())
+    occ=Occasion.objects.filter(active=True).annotate(n=Count('products',filter=Q(products__id__in=ids),distinct=True)).order_by('sort_order','name')
+    variants=Variant.objects.filter(product_id__in=ids)
+    sizes=sorted({v for v in variants.filter(stock__gt=0).values_list('size',flat=True) if v},key=lambda x:(SIZE_ORDER.index(x.upper()) if x.upper() in SIZE_ORDER else 99,x))
+    swatches={c.name.lower():c for c in Colour.objects.all()}
+    colours={}
+    for name,pid in variants.values_list('colour','product_id'):
+        key=name.strip().lower()
+        if not key:continue
+        c=colours.setdefault(key,{'name':swatches[key].name if key in swatches else name.strip().title(),'hex':swatches[key].hex if key in swatches else '#b9aca3','products':set(),'order':swatches[key].sort_order if key in swatches else 9999})
+        c['products'].add(pid)
+    price=base.aggregate(min=Min('price'),max=Max('price'))
+    return Response({'occasions':[occasion_data(o,o.n) for o in occ],
+                     'sizes':sizes,
+                     'colours':[{'name':c['name'],'hex':c['hex'],'count':len(c['products'])} for c in sorted(colours.values(),key=lambda c:(c['order'],c['name']))],
+                     'price':{'min':price['min'] or 0,'max':price['max'] or 0},
+                     'count':len(ids)})
 @api_view(['GET'])
 def products(request,slug=None):
-    q=Product.objects.filter(active=True).prefetch_related('images','variants','collections')
+    q=Product.objects.filter(active=True).prefetch_related('images','variants','collections','occasions')
     if slug:return Response(ProductSerializer(get_object_or_404(q,slug=slug)).data)
     p=request.query_params
     if p.get('collection'):q=q.filter(collections__slug=p['collection'])
@@ -74,13 +116,10 @@ def products(request,slug=None):
     except (ValueError,ArithmeticError):raise ValidationError('Invalid filter value.')
     if p.get('featured')=='1':q=q.filter(featured=True)
     order={'price-asc':'price','price-desc':'-price','newest':'-created_at','name':'name'}.get(p.get('sort'),'-featured')
+    wanted=[slugify(v) for v in p.getlist('occasion') if v]
+    if wanted:q=q.filter(occasions__slug__in=wanted,occasions__active=True)
     q=q.distinct().order_by(order,'id')
-    # JSON filtering works consistently on the optional SQLite development database.
-    wanted={v.lower() for v in p.getlist('occasion') if v}
-    if wanted:
-        q=[x for x in q if wanted & {v.lower() for v in x.occasions}]
-        count=len(q)
-    else:count=q.count()
+    count=q.count()
     return Response({'count':count,'page':page,'pages':max(1,(count+11)//12),'results':ProductSerializer(q[(page-1)*12:page*12],many=True).data})
 @api_view(['GET'])
 def collection(request,slug):return Response(CollectionSerializer(get_object_or_404(Collection,slug=slug,active=True)).data)

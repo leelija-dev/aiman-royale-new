@@ -6,6 +6,12 @@ export type MenuLink = {label: string; href: string};
 export type MenuColumn = {title: string; links: MenuLink[]};
 export type MenuItem = {label: string; href: string; columns: MenuColumn[]; feature?: {image: string; title: string; href: string}};
 
+// Pictures used when a menu item has no feature image uploaded in admin.
+export const FEATURE_FALLBACK = ['/images/gharara.webp', '/images/maroon.webp', '/images/navy.webp', '/images/green.webp', '/images/collection.webp'];
+
+// Everything below is only a fallback for when the store API is unreachable.
+// The live menu is managed in Django admin → Menu items.
+
 const occasions = ['Haldi', 'Wedding', 'Party', 'Festive'];
 const occasionLinks = (base: string): MenuLink[] => occasions.map(o => ({label: o, href: `${base}?occasion=${o}`}));
 
