@@ -160,3 +160,71 @@ footer p,footer a,footer h4,footer .brand em{color:#f7e6dc}
 .newsletter h2{font-size:27px}
 .header{height:65px}
 }
+
+/* ===== Readability: larger body text (min 14px for secondary copy) ===== */
+body{font-size:16px;line-height:1.7}
+p{font-size:inherit}
+small,.tiny{font-size:13px}
+label{font-size:14px}
+.announcement{font-size:13px;padding:7px 3%}
+.eyebrow{font-size:12px}
+.button,.underlink,.text-button{font-size:14px}
+.breadcrumb{font-size:13px}
+.hero-copy>p:not(.eyebrow),.editorial-copy>p,.collection-hero p,.catalogue-top>p,.fitting-banner p,.craft-note p,.auth-panel>p,.help-box p,.booking-aside p,.product-info>p,.product-subtitle,.product-info details p,.newsletter p{font-size:16px}
+.product-category{font-size:12px}.product-card h3{font-size:20px}.price{font-size:16px}.price del{font-size:14px}.product-colours{font-size:13px}.product-tag{font-size:11px}.quick-view{font-size:14px}
+.collection-card span,.occasion-grid span,.trust-strip,.mini-trust,.checkout-steps{font-size:14px}
+.filters input,.filters select,.filters .subtle,.pagination a{font-size:14px}
+.size-buttons button,.time-slots button,.quantity-control span,.summary-line,.bag-heading,.mini-item,.coupon input,.coupon button,.remove,.secure,.auth-switch,.tabs button,.status-pill,.feedback,.notice{font-size:14px}
+.bag-item p,.personal-help small,.choice>strong,.custom-fit strong,.personal-help strong,.measurements label,.quantity-label{font-size:14px}
+.product-info summary,.faq summary{font-size:17px}
+footer>div>p,footer>div>a:not(.brand){font-size:15px}footer h4{font-size:14px}.footer-bottom{font-size:13px}
+.home-heading p,.home-sale p,.home-consult p,.designer-notes p,.home-story p{font-size:16px}
+.home-edit-card span,.style-strip span,.mini-collections span{font-size:14px}
+.style-strip h3{font-size:16px}.mini-collections small{font-size:12px}
+.home-benefits strong{font-size:16px}.home-benefits small{font-size:13px}
+.consult-options small{font-size:12px}.consult-options ul{font-size:15px}.consult-options .button{font-size:14px}
+.designer-notes strong{font-size:14px}.newsletter .check,.newsletter form>p{font-size:13px}
+.appointment-link{font-size:13px}
+
+/* ===== Main menu (matches live site: uppercase items, pink pill, tabbed mega menu) ===== */
+.header{height:74px}
+.nav{font-family:'Segoe UI',Arial,Helvetica,sans-serif;font-size:16px;position:static}
+.menu-bar{display:flex;align-items:center;gap:6px;list-style:none;margin:0;padding:0}
+.menu-top{display:flex;align-items:center}
+.menu-link{display:block;padding:10px 16px;border-radius:6px;text-transform:uppercase;letter-spacing:.4px;font-weight:500;color:#2f3640;transition:background .2s,color .2s,box-shadow .2s}
+.nav .menu-link:hover,.menu-link.current{color:#d02f6a;background:#fde8ef;box-shadow:0 2px 8px #d02f6a26}
+.menu-expand{display:none;border:0;background:none;padding:8px}
+.mega{display:none;position:absolute;left:0;right:0;top:100%;z-index:40;background:linear-gradient(90deg,#fde7d9 0,#fde7d9 24%,#f6ece7 24%);border-top:1px solid var(--line);box-shadow:0 18px 40px #3a1c2420;min-height:300px;padding:28px 4% 30px 0;grid-template-columns:24% 1fr 260px;gap:0 32px}
+.mega.show{display:grid}
+.mega-tabs{display:flex;flex-direction:column;gap:6px;padding-top:4px}
+.mega-tabs button{border:0;background:none;text-align:left;font-size:18px;font-weight:500;color:#2f2a28;padding:12px 24px 12px 4vw;border-radius:0 26px 26px 0;transition:background .2s}
+.mega-tabs button.on,.mega-tabs button:hover{background:#fffaf7;box-shadow:0 2px 10px #c9a49222}
+.mega-panel{display:none}
+.mega-panel.on{display:block}
+.mega-panel ul{list-style:none;margin:0;padding:0;display:grid;grid-template-rows:repeat(5,auto);grid-auto-flow:column;grid-auto-columns:minmax(200px,1fr);gap:4px 40px}
+.mega-panel a{display:inline-block;font-size:19px;color:#2b2523;padding:8px 0;border-bottom:1px solid transparent;transition:color .2s,border-color .2s}
+.mega-panel a:hover{color:#d02f6a;border-color:#d02f6a}
+.mega-mobile-title{display:none}
+.mega-feature{position:relative;display:block;height:260px;overflow:hidden;border-radius:6px;align-self:start}
+.mega-feature img{width:100%;height:100%;object-position:top;transition:transform .4s}
+.mega-feature:hover img{transform:scale(1.04)}
+.mega-feature span{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;color:#fff;font-family:Georgia,serif;font-size:18px;background:linear-gradient(transparent,#2a1015cc)}
+@media(max-width:1200px){.menu-link{padding:9px 10px;font-size:15px}.mega{grid-template-columns:22% 1fr;}.mega-feature{display:none}}
+@media(max-width:900px){
+ .nav{display:none;position:absolute;top:100%;left:0;right:0;background:var(--paper);padding:10px 5% 20px;border-bottom:1px solid var(--line);max-height:calc(100vh - 100px);overflow:auto;z-index:40}
+ .nav.open{display:block}
+ .menu-bar{flex-direction:column;align-items:stretch;gap:0}
+ .menu-bar>li{border-bottom:1px solid var(--line)}
+ .menu-top{justify-content:space-between}
+ .menu-link{font-size:17px;padding:14px 4px;flex:1}
+ .menu-link.current,.nav .menu-link:hover{box-shadow:none}
+ .menu-expand{display:flex}
+ .mega,.mega.show{display:none;position:static;box-shadow:none;background:none;padding:0 4px 14px;min-height:0;border:0}
+ .mega.mobile-show{display:block}
+ .mega-tabs,.mega-feature{display:none}
+ .mega-panel,.mega-panel.on{display:block;margin-top:10px}
+ .mega-mobile-title{display:block;font-size:13px;letter-spacing:1.4px;text-transform:uppercase;color:var(--wine);margin:6px 0 4px;font-weight:600}
+ .mega-panel ul{display:grid;grid-template-columns:1fr 1fr;grid-auto-flow:row;grid-template-rows:none;gap:0 16px}
+ .mega-panel a{font-size:16px;padding:7px 0}
+}
+@media(max-width:700px){body{font-size:15px}}
