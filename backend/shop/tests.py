@@ -136,3 +136,17 @@ class CommerceTests(TestCase):
         o=self.reserve();other=Customer.objects.create_user(username='another')
         self.client.force_login(other)
         self.assertEqual(self.client.post('/api/payments/verify/',{'order':str(o.pk)},format='json').status_code,404);gateway.assert_not_called()
+
+
+class MultiValueFilterTests(TestCase):
+    def test_occasion_and_colour_accept_several_values(self):
+        from shop.models import Product, Variant
+        a=Product.objects.create(name='A',slug='a',price=1000,mrp=2000,occasions=['Haldi'])
+        b=Product.objects.create(name='B',slug='b',price=1000,mrp=2000,occasions=['Party'])
+        Product.objects.create(name='C',slug='c',price=1000,mrp=2000,occasions=['Festive'])
+        Variant.objects.create(product=a,sku='A-M',size='M',colour='Maroon',stock=2)
+        Variant.objects.create(product=b,sku='B-S',size='S',colour='Wine',stock=2)
+        r=self.client.get('/api/products/?occasion=Haldi&occasion=Party')
+        self.assertEqual({x['slug'] for x in r.json()['results']},{'a','b'})
+        r=self.client.get('/api/products/?colour=maroon&colour=wine&size=M&size=S')
+        self.assertEqual({x['slug'] for x in r.json()['results']},{'a','b'})

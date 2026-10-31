@@ -59,8 +59,14 @@ def products(request,slug=None):
     p=request.query_params
     if p.get('collection'):q=q.filter(collections__slug=p['collection'])
     if p.get('q'):q=q.filter(Q(name__icontains=p['q'])|Q(description__icontains=p['q']))
-    if p.get('size'):q=q.filter(variants__size=p['size'],variants__stock__gt=0)
-    if p.get('colour'):q=q.filter(variants__colour__iexact=p['colour'])
+    # Filters accept repeated values (e.g. ?size=S&size=M) and match any of them.
+    sizes=[v for v in p.getlist('size') if v]
+    if sizes:q=q.filter(variants__size__in=sizes,variants__stock__gt=0)
+    colours=[v for v in p.getlist('colour') if v]
+    if colours:
+        cq=Q()
+        for c in colours:cq|=Q(variants__colour__iexact=c)
+        q=q.filter(cq)
     try:
         if p.get('min'):q=q.filter(price__gte=Decimal(p['min']))
         if p.get('max'):q=q.filter(price__lte=Decimal(p['max']))
@@ -70,8 +76,9 @@ def products(request,slug=None):
     order={'price-asc':'price','price-desc':'-price','newest':'-created_at','name':'name'}.get(p.get('sort'),'-featured')
     q=q.distinct().order_by(order,'id')
     # JSON filtering works consistently on the optional SQLite development database.
-    if p.get('occasion'):
-        q=[x for x in q if p['occasion'].lower() in [v.lower() for v in x.occasions]]
+    wanted={v.lower() for v in p.getlist('occasion') if v}
+    if wanted:
+        q=[x for x in q if wanted & {v.lower() for v in x.occasions}]
         count=len(q)
     else:count=q.count()
     return Response({'count':count,'page':page,'pages':max(1,(count+11)//12),'results':ProductSerializer(q[(page-1)*12:page*12],many=True).data})

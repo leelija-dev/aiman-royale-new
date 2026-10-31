@@ -1,4 +1,116 @@
-import Image from 'next/image';import Link from 'next/link';import {notFound} from 'next/navigation';
-import {get} from '@/lib/server';import {Collection,ProductPage} from '@/lib/types';import {Listing} from '@/components/catalogue';
-export async function generateMetadata({params}:{params:Promise<{slug:string}>}){const {slug}=await params;try{const c=await get<Collection>(`collections/${slug}/`);return {title:c.seo_title||c.name,description:c.seo_description||c.description,alternates:{canonical:`/collections/${slug}`}};}catch{return {title:'Collection'}}}
-export default async function CollectionPage({params,searchParams}:{params:Promise<{slug:string}>;searchParams:Promise<Record<string,string>>}){const {slug}=await params,q=await searchParams;let c:Collection;try{c=await get<Collection>(`collections/${slug}/`);}catch(e){if(e instanceof Error&&e.message==='Not found')notFound();throw e;}const data=await get<ProductPage>(`products/?${new URLSearchParams({...q,collection:slug})}`);return <><div className="breadcrumb"><Link href="/">Home</Link> / Collections / {c.name}</div><section className="collection-hero"><div><p className="eyebrow">TIMELESS SILHOUETTES · MODERN STORIES</p><h1>{c.name}</h1><p>{c.description}</p><a href="#occasions" className="underlink">Find your occasion ↓</a></div><div className="collection-hero-image"><Image src={c.image||'/images/collection.webp'} alt={c.name} fill priority sizes="50vw"/></div></section><section id="occasions" className="section occasion-section"><div className="section-heading centered"><p className="eyebrow">CELEBRATE BEAUTIFULLY</p><h2>Shop by Occasion</h2><p>{c.name} for every invitation on your calendar.</p></div><div className="occasion-grid">{['Haldi','Wedding','Party','Festive'].map((o,i)=><Link key={o} href={`/collections/${slug}?occasion=${o}`} className={q.occasion===o?'active':''}><div><Image src={['/images/green.webp','/images/gharara.webp','/images/purple.webp','/images/maroon.webp'][i]} alt={`${o} ${c.name}`} fill sizes="(max-width:600px) 40vw,20vw"/></div><h3>{o}</h3><span>Explore {c.name} →</span></Link>)}</div></section><Listing data={data} query={q} collection={slug}/></>}
+import Image from 'next/image';
+import Link from 'next/link';
+import {notFound} from 'next/navigation';
+import {ArrowRight, ArrowDown, ArrowUpRight, CalendarDays, UserRound, Ruler, HelpCircle, Shirt} from 'lucide-react';
+import {get} from '@/lib/server';
+import {Collection, ProductPage} from '@/lib/types';
+import {mainMenu, salwarStyles} from '@/lib/menu';
+import {Filters, Results} from '@/components/collection-page';
+import {OCCASIONS, toParams, type Query} from '@/lib/query';
+
+type Props = {params: Promise<{slug: string}>; searchParams: Promise<Query>};
+
+export async function generateMetadata({params}: Props) {
+  const {slug} = await params;
+  try {
+    const c = await get<Collection>(`collections/${slug}/`);
+    return {title: c.seo_title || `${c.name} for Women`, description: c.seo_description || c.description, alternates: {canonical: `/collections/${slug}`}};
+  } catch { return {title: 'Collection'}; }
+}
+
+const OCCASION_IMAGES: Record<string, string> = {Haldi: '/images/green.webp', Wedding: '/images/gharara.webp', Party: '/images/purple.webp', Festive: '/images/maroon.webp'};
+
+const STORY: {slug: string; label: string; image: string}[] = [
+  {slug: 'anarkali-suits', label: 'Anarkali Suits', image: '/images/maroon.webp'},
+  {slug: 'palazzo-suits', label: 'Palazzo Suits', image: '/images/green.webp'},
+  {slug: 'wedding', label: 'Wedding Collection', image: '/images/gharara.webp'},
+  {slug: 'salwar-kameez', label: 'Salwar Kameez', image: '/images/rani.webp'},
+  {slug: 'bridal', label: 'Bridal Collection', image: '/images/wine.webp'},
+];
+
+const faqs = (name: string) => [
+  {icon: <CalendarDays size={20}/>, q: 'How do I choose the right size?', a: `Every ${name.toLowerCase()} style has a size chart on its product page. Compare your bust, waist and hip measurements, or choose custom fitting and share your measurements with us.`},
+  {icon: <HelpCircle size={20}/>, q: 'Can I book a fitting before ordering?', a: 'Yes. Book a studio or video appointment and our team will help you with measurements, fabric and the right silhouette before you order.'},
+  {icon: <Shirt size={20}/>, q: 'Which suit style suits my occasion?', a: 'Rich embroidery and heavier fabrics suit weddings and receptions; lighter colours and flowing silhouettes work beautifully for haldi, festive days and parties.'},
+];
+
+export default async function CollectionPage({params, searchParams}: Props) {
+  const {slug} = await params, q = await searchParams;
+  let c: Collection;
+  try { c = await get<Collection>(`collections/${slug}/`); }
+  catch (e) { if (e instanceof Error && e.message === 'Not found') notFound(); throw e; }
+  const apiQuery = toParams(q); apiQuery.set('collection', slug);
+  const data = await get<ProductPage>(`products/?${apiQuery}`);
+  const base = `/collections/${slug}`;
+  const styles = mainMenu.find(m => m.href === base)?.columns.find(col => col.title === 'Style')?.links || salwarStyles.slice(0, 6);
+  const story = STORY.filter(s => s.slug !== slug).slice(0, 3);
+  const qa = faqs(c.name);
+  const faqLd = {'@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: qa.map(f => ({'@type': 'Question', name: f.q, acceptedAnswer: {'@type': 'Answer', text: f.a}}))};
+
+  return <div className="cp">
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify(faqLd)}}/>
+
+    <section className="cp-hero">
+      <Image src={c.image || '/images/collection.webp'} alt="" fill priority sizes="100vw"/>
+      <div className="cp-hero-copy">
+        <nav className="cp-crumbs" aria-label="Breadcrumb"><Link href="/">Home</Link> / <Link href="/products">Collections</Link> / <span>{c.name}</span></nav>
+        <p className="cp-eyebrow">The {c.name} Edit</p>
+        <h1>{c.name}</h1>
+        <p className="cp-tagline">Heritage in every detail. Elegance in every moment.</p>
+        <p className="cp-intro">{c.description || `Discover embroidered ${c.name.toLowerCase()}, graceful silhouettes and occasion-ready styles, with personal guidance to help you find your fit.`}</p>
+        <a href="#collection" className="cp-explore">Explore the Collection <ArrowDown size={16}/></a>
+      </div>
+    </section>
+
+    <section className="cp-wrap cp-occasions">
+      <h2>Shop by Occasion</h2>
+      <div className="cp-occasion-grid">{OCCASIONS.map(o =>
+        <Link key={o} href={`${base}?occasion=${o}#collection`} className="cp-occasion">
+          <div><Image src={OCCASION_IMAGES[o]} alt={`${o} ${c.name}`} fill sizes="(max-width:700px) 46vw, 24vw"/></div>
+          <span>{o} {c.name} <ArrowRight size={16}/></span>
+        </Link>)}</div>
+    </section>
+
+    <section id="collection" className="cp-wrap cp-shop">
+      <Filters base={base} query={q} styles={styles}/>
+      <Results key={apiQuery.toString()} data={data} query={q} base={base} extra={{collection: slug}}/>
+    </section>
+
+    <section className="cp-fitting">
+      <div className="cp-fitting-photo"><Image src="/images/fitting.webp" alt="A stylist measuring a client for a custom fit" fill sizes="(max-width:800px) 100vw, 50vw"/></div>
+      <div className="cp-fitting-copy">
+        <h2>A style you love.<br/>A fit that feels like you.</h2>
+        <p>Discuss your measurements, your occasion and your favourite designs with our team.</p>
+        <div className="cp-fitting-actions"><Link href="/appointment" className="cp-light-button">Book a Fitting <ArrowRight size={16}/></Link><Link href="/info/size-guide" className="cp-light-link">View Size Guide <ArrowUpRight size={16}/></Link></div>
+        <ul><li><CalendarDays size={20}/>Choose a date.</li><li><UserRound size={20}/>Meet our team.</li><li><Ruler size={20}/>Find your fit.</li></ul>
+      </div>
+    </section>
+
+    <section className="cp-wrap cp-seo">
+      <div>
+        <h2>Buy Embroidered {c.name} for Women Online</h2>
+        <p>At Aiman Royale, we treat {c.name.toLowerCase()} for women as more than just a collection. They are a reflection of culture, grace, and confidence — designed for every celebration on your calendar.</p>
+        <Link href="/info/size-guide" className="cp-text-link">Read the Collection Guide <ArrowRight size={16}/></Link>
+      </div>
+      <div className="cp-accordion">
+        <details><summary>Choosing your silhouette</summary><p>Anarkalis flatter with a flowing flare, straight suits feel tailored and modern, while sharara and palazzo sets bring ease and movement.</p></details>
+        <details><summary>Styling for your occasion</summary><p>Choose deeper jewel tones and heavy embroidery for weddings, pastels for haldi and day events, and lighter work for festive gatherings.</p></details>
+        <details><summary>Finding your size</summary><p>Use our size guide or choose custom fitting on any eligible style. Our team will confirm measurements before stitching.</p></details>
+      </div>
+    </section>
+
+    <section className="cp-wrap cp-story">
+      <h2>Continue your style story.</h2>
+      <div className="cp-story-grid">{story.map(s =>
+        <Link key={s.slug} href={`/collections/${s.slug}`} className="cp-story-card">
+          <div><Image src={s.image} alt={s.label} fill sizes="(max-width:700px) 100vw, 32vw"/></div>
+          <span>{s.label} <ArrowRight size={16}/></span>
+        </Link>)}</div>
+    </section>
+
+    <section className="cp-wrap cp-faq">
+      <h2>A little guidance, before you choose.</h2>
+      <div className="cp-accordion">{qa.map(f => <details key={f.q}><summary><span className="cp-faq-icon">{f.icon}</span>{f.q}</summary><p>{f.a}</p></details>)}</div>
+    </section>
+  </div>;
+}
