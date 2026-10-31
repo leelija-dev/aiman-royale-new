@@ -366,3 +366,6 @@ footer>div>p,footer>div>a:not(.brand){font-size:15px}footer h4{font-size:14px}.f
 footer .social{color:#f7e6dc!important}
 .cp-filter-toggle .flip{transform:rotate(180deg)}
 @media(max-width:800px){.cp-occasion>span{display:block;font-size:15px}.cp-occasion>span svg{display:inline;vertical-align:-3px;margin-left:4px}}
+.cp-count{margin-left:auto;font-style:normal;font-size:13px;color:#9a8c82}
+.cp-colour{width:100%}
+.cp-range{font-size:14px;color:#6d5d55;margin:10px 0 0}

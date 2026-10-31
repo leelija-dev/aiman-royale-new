@@ -3,10 +3,10 @@ import Link from 'next/link';
 import {notFound} from 'next/navigation';
 import {ArrowRight, ArrowDown, ArrowUpRight, CalendarDays, UserRound, Ruler, HelpCircle, Shirt} from 'lucide-react';
 import {get} from '@/lib/server';
-import {Collection, ProductPage} from '@/lib/types';
-import {mainMenu, salwarStyles} from '@/lib/menu';
+import {Collection, ProductPage, Facets, Site} from '@/lib/types';
+import {mainMenu, type MenuItem, type MenuLink} from '@/lib/menu';
 import {Filters, Results} from '@/components/collection-page';
-import {OCCASIONS, toParams, type Query} from '@/lib/query';
+import {toParams, occasionImage, type Query} from '@/lib/query';
 
 type Props = {params: Promise<{slug: string}>; searchParams: Promise<Query>};
 
@@ -18,15 +18,14 @@ export async function generateMetadata({params}: Props) {
   } catch { return {title: 'Collection'}; }
 }
 
-const OCCASION_IMAGES: Record<string, string> = {Haldi: '/images/green.webp', Wedding: '/images/gharara.webp', Party: '/images/purple.webp', Festive: '/images/maroon.webp'};
+const STORY_FALLBACK = ['/images/maroon.webp', '/images/green.webp', '/images/gharara.webp', '/images/rani.webp', '/images/wine.webp'];
+const EMPTY_FACETS: Facets = {occasions: [], sizes: [], colours: [], price: {min: 0, max: 0}, count: 0};
 
-const STORY: {slug: string; label: string; image: string}[] = [
-  {slug: 'anarkali-suits', label: 'Anarkali Suits', image: '/images/maroon.webp'},
-  {slug: 'palazzo-suits', label: 'Palazzo Suits', image: '/images/green.webp'},
-  {slug: 'wedding', label: 'Wedding Collection', image: '/images/gharara.webp'},
-  {slug: 'salwar-kameez', label: 'Salwar Kameez', image: '/images/rani.webp'},
-  {slug: 'bridal', label: 'Bridal Collection', image: '/images/wine.webp'},
-];
+/** "Style" links for the sidebar: this collection's menu item, else the "Collections" menu item. */
+function styleLinks(menu: MenuItem[], base: string): MenuLink[] {
+  const style = (m?: MenuItem) => m?.columns.find(c => c.title === 'Style')?.links;
+  return style(menu.find(m => m.href === base)) || style(menu.find(m => m.href === '/products')) || [];
+}
 
 const faqs = (name: string) => [
   {icon: <CalendarDays size={20}/>, q: 'How do I choose the right size?', a: `Every ${name.toLowerCase()} style has a size chart on its product page. Compare your bust, waist and hip measurements, or choose custom fitting and share your measurements with us.`},
@@ -40,10 +39,17 @@ export default async function CollectionPage({params, searchParams}: Props) {
   try { c = await get<Collection>(`collections/${slug}/`); }
   catch (e) { if (e instanceof Error && e.message === 'Not found') notFound(); throw e; }
   const apiQuery = toParams(q); apiQuery.set('collection', slug);
-  const data = await get<ProductPage>(`products/?${apiQuery}`);
+  const [data, facets, site] = await Promise.all([
+    get<ProductPage>(`products/?${apiQuery}`),
+    get<Facets>(`facets/?collection=${encodeURIComponent(slug)}`).catch(() => EMPTY_FACETS),
+    get<Site>('site/').catch(() => null),
+  ]);
   const base = `/collections/${slug}`;
-  const styles = mainMenu.find(m => m.href === base)?.columns.find(col => col.title === 'Style')?.links || salwarStyles.slice(0, 6);
-  const story = STORY.filter(s => s.slug !== slug).slice(0, 3);
+  const styles = styleLinks(site?.menu?.length ? site.menu : mainMenu, base);
+  // Occasion cards: occasions that have products here; if none do yet, every active occasion.
+  const withProducts = facets.occasions.filter(o => o.count);
+  const occasionCards = (withProducts.length ? withProducts : (site?.occasions || facets.occasions)).slice(0, 4);
+  const story = (site?.collections || []).filter(s => s.slug !== slug).slice(0, 3);
   const qa = faqs(c.name);
   const faqLd = {'@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: qa.map(f => ({'@type': 'Question', name: f.q, acceptedAnswer: {'@type': 'Answer', text: f.a}}))};
 
@@ -62,17 +68,17 @@ export default async function CollectionPage({params, searchParams}: Props) {
       </div>
     </section>
 
-    <section className="cp-wrap cp-occasions">
+    {occasionCards.length > 0 && <section className="cp-wrap cp-occasions">
       <h2>Shop by Occasion</h2>
-      <div className="cp-occasion-grid">{OCCASIONS.map(o =>
-        <Link key={o} href={`${base}?occasion=${o}#collection`} className="cp-occasion">
-          <div><Image src={OCCASION_IMAGES[o]} alt={`${o} ${c.name}`} fill sizes="(max-width:700px) 46vw, 24vw"/></div>
-          <span>{o} {c.name} <ArrowRight size={16}/></span>
+      <div className="cp-occasion-grid">{occasionCards.map((o, i) =>
+        <Link key={o.slug} href={`${base}?occasion=${o.slug}#collection`} className="cp-occasion">
+          <div><Image src={occasionImage(o, i)} alt={`${o.name} ${c.name}`} fill sizes="(max-width:700px) 46vw, 24vw"/></div>
+          <span>{o.name} {c.name} <ArrowRight size={16}/></span>
         </Link>)}</div>
-    </section>
+    </section>}
 
     <section id="collection" className="cp-wrap cp-shop">
-      <Filters base={base} query={q} styles={styles}/>
+      <Filters base={base} query={q} styles={styles} facets={facets}/>
       <Results key={apiQuery.toString()} data={data} query={q} base={base} extra={{collection: slug}}/>
     </section>
 
@@ -99,14 +105,14 @@ export default async function CollectionPage({params, searchParams}: Props) {
       </div>
     </section>
 
-    <section className="cp-wrap cp-story">
+    {story.length > 0 && <section className="cp-wrap cp-story">
       <h2>Continue your style story.</h2>
-      <div className="cp-story-grid">{story.map(s =>
+      <div className="cp-story-grid">{story.map((s, i) =>
         <Link key={s.slug} href={`/collections/${s.slug}`} className="cp-story-card">
-          <div><Image src={s.image} alt={s.label} fill sizes="(max-width:700px) 100vw, 32vw"/></div>
-          <span>{s.label} <ArrowRight size={16}/></span>
+          <div><Image src={s.image || STORY_FALLBACK[i % STORY_FALLBACK.length]} alt={s.name} fill sizes="(max-width:700px) 100vw, 32vw"/></div>
+          <span>{s.name} <ArrowRight size={16}/></span>
         </Link>)}</div>
-    </section>
+    </section>}
 
     <section className="cp-wrap cp-faq">
       <h2>A little guidance, before you choose.</h2>
