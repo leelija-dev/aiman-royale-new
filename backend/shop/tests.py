@@ -261,3 +261,52 @@ class SizeGuideTests(TestCase):
         self.assertEqual(len(d['steps']),4);self.assertIn('variations',d['note'])
         SizeChartRow.objects.filter(size='XS').update(bust='33.5')
         self.assertEqual(self.client.get('/api/size-guide/').json()['rows'][0]['bust'],33.5)
+
+
+class ReportedIssuesTests(TestCase):
+    def setUp(self):
+        from shop.models import Customer, Product, Variant, Collection
+        self.u=Customer.objects.create_user(username='p@example.com',email='p@example.com',password='Old-Password-2026!',first_name='Priya')
+        self.c=APIClient();self.c.force_login(self.u)
+        self.parent=Collection.objects.create(name='Suits',slug='suits-t');self.child=Collection.objects.create(name='Anarkali T',slug='anarkali-t',parent=self.parent)
+        self.p=Product.objects.create(name='P',slug='p-t',price=1000,mrp=1500);self.p.collections.add(self.parent,self.child)
+        self.v=Variant.objects.create(product=self.p,sku='PT-M',size='M',colour='Red',stock=25)
+    def test_no_ten_unit_limit_only_stock(self):
+        self.assertEqual(self.c.post('/api/cart/',{'variant':self.v.id,'quantity':15},format='json').status_code,200)
+        r=self.c.post('/api/cart/',{'variant':self.v.id,'quantity':11},format='json');self.assertEqual(r.status_code,400);self.assertIn('Only 25 left',str(r.json()))
+    def test_profile_edit_and_password_change(self):
+        r=self.c.patch('/api/auth/me/',{'first_name':'Priya','last_name':'Sen','phone':'+919812345678','marketing_opt_in':True},format='json')
+        self.assertEqual(r.json()['user']['name'],'Priya Sen');self.assertEqual(r.json()['user']['phone'],'+919812345678')
+        self.assertEqual(self.c.patch('/api/auth/me/',{'phone':'12'},format='json').status_code,400)
+        self.assertEqual(self.c.post('/api/auth/password/',{'current':'wrong','new':'New-Password-2026!'},format='json').status_code,400)
+        self.assertEqual(self.c.post('/api/auth/password/',{'current':'Old-Password-2026!','new':'New-Password-2026!'},format='json').status_code,200)
+        self.u.refresh_from_db();self.assertTrue(self.u.check_password('New-Password-2026!'))
+        self.assertEqual(self.c.get('/api/auth/me/').json()['user']['email'],'p@example.com')
+    def test_coupon_list_shows_saving_for_bag(self):
+        from shop.models import Coupon
+        Coupon.objects.create(code='TEN',percent=10,description='Festive');Coupon.objects.create(code='BIG',percent=20,minimum=5000);Coupon.objects.create(code='HIDDEN',percent=50,public=False)
+        self.c.post('/api/cart/',{'variant':self.v.id,'quantity':2},format='json')
+        d={x['code']:x for x in self.c.get('/api/coupons/').json()}
+        self.assertNotIn('HIDDEN',d);self.assertTrue(d['TEN']['eligible']);self.assertEqual(float(d['TEN']['saving']),200.0)
+        self.assertFalse(d['BIG']['eligible']);self.assertEqual(float(d['BIG']['short_by']),3000.0)
+    def test_menu_style_tab_lists_sub_collections_with_products(self):
+        from shop.models import MenuItem
+        MenuItem.objects.all().delete();MenuItem.objects.create(label='Suits',url='/collections/suits-t')
+        menu=self.c.get('/api/site/').json()['menu']
+        style=[c for c in menu[0]['columns'] if c['title']=='Style'][0]['links']
+        self.assertEqual(style[0]['label'],'Anarkali T');self.assertEqual(style[0]['count'],1)
+    def test_order_history_has_image_and_address(self):
+        from shop.services import reserve_order
+        from shop.models import Cart, CartItem
+        cart=Cart.objects.create(user=self.u);CartItem.objects.create(cart=cart,variant=self.v,quantity=1)
+        reserve_order(self.u,cart,{'name':'Priya','phone':'+919812345678','email':'p@example.com','line1':'1 Road','city':'Kolkata','state':'WB','pincode':'700001','country':'IN'},uuid.uuid4(),'','cod')
+        o=self.c.get('/api/orders/').json()[0];self.assertEqual(o['address']['city'],'Kolkata');self.assertEqual(o['items'][0]['slug'],'p-t')
+    @override_settings()
+    def test_cashfree_test_key_names_are_accepted(self):
+        import os,importlib
+        from unittest import mock
+        with mock.patch.dict(os.environ,{'CASHFREE_ENVIRONMENT':'sandbox','CASHFREE_TEST_APP_ID':'"TESTabc"','CASHFREE_TEST_SECRET_KEY':'cfsk_x'},clear=False):
+            os.environ.pop('CASHFREE_APP_ID',None);os.environ.pop('CASHFREE_SECRET_KEY',None)
+            import config.settings as st;importlib.reload(st)
+            self.assertEqual(st.CASHFREE_APP_ID,'TESTabc');self.assertEqual(st.CASHFREE_SECRET_KEY,'cfsk_x')
+        importlib.reload(st)

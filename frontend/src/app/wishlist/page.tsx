@@ -1,1 +1,7 @@
-import {WishlistView} from '@/components/commerce';export const metadata={title:'Wishlist',robots:{index:false,follow:false}};export default function Page(){return <WishlistView/>}
+import {WishlistPage} from '@/components/account';
+
+export const metadata = {title: 'My Wishlist', robots: {index: false, follow: false}};
+
+export default function Page() {
+  return <WishlistPage/>;
+}

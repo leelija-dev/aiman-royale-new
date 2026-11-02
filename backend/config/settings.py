@@ -57,9 +57,12 @@ EMAIL_HOST_PASSWORD=os.getenv('EMAIL_HOST_PASSWORD','')
 DEFAULT_FROM_EMAIL=os.getenv('DEFAULT_FROM_EMAIL','noreply@example.com')
 DATA_UPLOAD_MAX_MEMORY_SIZE=3*1024*1024
 FILE_UPLOAD_MAX_MEMORY_SIZE=3*1024*1024
-CASHFREE_APP_ID=os.getenv('CASHFREE_APP_ID','')
-CASHFREE_SECRET_KEY=os.getenv('CASHFREE_SECRET_KEY','')
 CASHFREE_ENVIRONMENT=os.getenv('CASHFREE_ENVIRONMENT','sandbox')
+# CASHFREE_APP_ID / CASHFREE_SECRET_KEY are the standard names. In sandbox the
+# CASHFREE_TEST_APP_ID / CASHFREE_TEST_SECRET_KEY names are accepted too.
+_cf_test=CASHFREE_ENVIRONMENT=='sandbox'
+CASHFREE_APP_ID=(os.getenv('CASHFREE_APP_ID') or (os.getenv('CASHFREE_TEST_APP_ID','') if _cf_test else '')).strip().strip('"')
+CASHFREE_SECRET_KEY=(os.getenv('CASHFREE_SECRET_KEY') or (os.getenv('CASHFREE_TEST_SECRET_KEY','') if _cf_test else '')).strip().strip('"')
 CASHFREE_API_VERSION=os.getenv('CASHFREE_API_VERSION','2025-01-01')
 PUBLIC_SITE_URL=os.getenv('NEXT_PUBLIC_SITE_URL','http://localhost:3000').rstrip('/')
 if CASHFREE_ENVIRONMENT not in ['sandbox','production']:
