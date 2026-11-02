@@ -35,7 +35,12 @@ class AppointmentSerializer(serializers.ModelSerializer):
 class OrderItemSerializer(serializers.ModelSerializer):
     size=serializers.CharField(source='variant.size')
     colour=serializers.CharField(source='variant.colour')
-    class Meta:model=OrderItem;fields=['name','unit_price','quantity','size','colour','measurements']
+    slug=serializers.CharField(source='variant.product.slug')
+    image=serializers.SerializerMethodField()
+    class Meta:model=OrderItem;fields=['name','unit_price','quantity','size','colour','measurements','slug','image']
+    def get_image(self,obj):
+        im=obj.variant.product.images.first()
+        return im.image.url if im and im.image else ''
 class OrderSerializer(serializers.ModelSerializer):
     items=OrderItemSerializer(many=True,read_only=True)
     class Meta:model=Order;fields=['id','status','subtotal','discount','shipping','total','address','payment_method','pay_with','note','gateway_order_id','created_at','tracking_url','items']

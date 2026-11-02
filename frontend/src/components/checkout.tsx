@@ -7,6 +7,7 @@ import {ArrowLeft, ArrowRight, ChevronRight, Landmark, Banknote, CreditCard, Hea
 import {api, bagChanged, err} from '@/lib/client';
 import {Bag, Order, Site, User, money, photo} from '@/lib/types';
 import {Steps, COUPON_KEY, NOTE_KEY} from '@/components/bag';
+import {SavingZone} from '@/components/saving-zone';
 
 type Quote = {subtotal: string; discount: string; shipping: string; total: string};
 type Address = Record<'name' | 'phone' | 'email' | 'line1' | 'line2' | 'city' | 'state' | 'pincode', string>;
@@ -50,7 +51,7 @@ export function CheckoutPage({site}: {site: Site}) {
   const [bag, setBag] = useState<Bag | null>(null), [user, setUser] = useState<User | null>(null), [quote, setQuote] = useState<Quote | null>(null);
   const [address, setAddress] = useState<Address | null>(null), [editing, setEditing] = useState(true);
   const [method, setMethod] = useState<Method>('upi'), [agree, setAgree] = useState(false);
-  const [coupon, setCoupon] = useState(''), [promoOpen, setPromoOpen] = useState(false), [promoMsg, setPromoMsg] = useState<{ok: boolean; text: string} | null>(null), [note, setNote] = useState('');
+  const [coupon, setCoupon] = useState(''), [promoMsg, setPromoMsg] = useState<{ok: boolean; text: string} | null>(null), [note, setNote] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [order, setOrder] = useState<Order | null>(null), [key, setKey] = useState('');
 
   useEffect(() => {
@@ -66,18 +67,12 @@ export function CheckoutPage({site}: {site: Site}) {
         setAddress(a); setEditing(!saved);
         if (b.items.length) {
           const c = read(COUPON_KEY);
-          try { setQuote(await api<Quote>('quote/', 'POST', {coupon: c})); if (c) { setCoupon(c); setPromoMsg({ok: true, text: `Code ${c} applied.`}); } }
+          try { setQuote(await api<Quote>('quote/', 'POST', {coupon: c})); if (c) { setCoupon(c); setPromoMsg({ok: true, text: 'Coupon applied.'}); } }
           catch { write(COUPON_KEY, ''); setQuote(await api<Quote>('quote/', 'POST', {})); }
         }
       } catch (e) { setError(err(e)); }
     })();
   }, [router]);
-
-  async function applyPromo(e: React.FormEvent) {
-    e.preventDefault(); const c = coupon.trim().toUpperCase();
-    try { setQuote(await api<Quote>('quote/', 'POST', {coupon: c})); write(COUPON_KEY, c); setCoupon(c); setPromoMsg(c ? {ok: true, text: `Code ${c} applied.`} : null); }
-    catch (e2) { setPromoMsg({ok: false, text: err(e2)}); }
-  }
 
   function saveAddress(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -91,6 +86,7 @@ export function CheckoutPage({site}: {site: Site}) {
     if (!address || editing) { setError('Please save your contact and delivery details first.'); document.getElementById('co-delivery')?.scrollIntoView({behavior: 'smooth'}); return; }
     if (!agree) { setError('Please accept the Terms & Conditions and Return & Refund Policy.'); return; }
     if (method === 'cod' && !site.cod_enabled) { setError('Cash on Delivery is not available for this order.'); return; }
+    if (method !== 'cod' && !site.payment_ready) { setError('Online payment is not switched on yet — the Cashfree keys are missing on the server. Please choose another option or contact us to complete your order.'); return; }
     setBusy(true); setError('');
     try {
       const online = method !== 'cod';
@@ -151,7 +147,7 @@ export function CheckoutPage({site}: {site: Site}) {
               {on && m.id === 'netbanking' && <div className="co-method-body"><div><p>Choose your bank in our payment partner’s secure window and complete the payment there.</p></div></div>}
               {on && m.id === 'cod' && <div className="co-method-body"><div><p>Pay in cash when your order arrives. Please keep the exact amount ready.</p></div></div>}
             </div>; })}</div>
-          {!site.payment_ready && method !== 'cod' && <p className="notice">Online payments are being set up. Please contact the studio for help.</p>}
+          {!site.payment_ready && method !== 'cod' && <p className="notice">Online payment isn’t available right now. You can still place the order with Cash on Delivery (if offered) or contact us on WhatsApp.</p>}
         </section>
 
         <section className="co-card">
@@ -162,7 +158,7 @@ export function CheckoutPage({site}: {site: Site}) {
         <label className="co-terms"><input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)}/> <span>I agree to the <Link href="/info/terms">Terms &amp; Conditions</Link> and <Link href="/info/returns">Return &amp; Refund Policy</Link>.</span></label>
         {error && <p className="pd-err co-error" role="alert">{error}</p>}
         {order && order.status !== 'paid' && <p className="notice">Order reference {order.id.slice(0, 8).toUpperCase()} · {order.status.replace('_', ' ')}. <Link href="/account">View in your account</Link></p>}
-        <button type="button" className="pd-btn pd-btn-bag co-pay" disabled={busy || !quote || (method !== 'cod' && !site.payment_ready)} onClick={pay}>
+        <button type="button" className="pd-btn pd-btn-bag co-pay" disabled={busy || !quote} onClick={pay}>
           {busy ? 'Please wait…' : method === 'cod' ? <>Place Order <ArrowRight size={20}/></> : <>Continue to Secure Payment <ArrowRight size={20}/></>}</button>
         <p className="co-small center">{method === 'cod' ? 'You will pay when your order is delivered.' : 'Payment is completed through our payment partner.'}</p>
       </div>
@@ -181,9 +177,9 @@ export function CheckoutPage({site}: {site: Site}) {
         <hr/>
         <div className="sum-total"><span>Estimated total</span><strong>{money(quote ? quote.total : sub)}</strong></div>
         <p className="co-small">Final payable amount is confirmed on the payment screen.</p>
-        <div className="co-promo"><button type="button" aria-expanded={promoOpen} onClick={() => setPromoOpen(!promoOpen)}><TicketPercent size={20}/> {coupon && promoMsg?.ok ? `Promo code ${coupon} applied` : 'Add a promo code'}<ChevronRight size={18} className={promoOpen ? 'rot' : ''}/></button>
-          {promoOpen && <form onSubmit={applyPromo}><input value={coupon} onChange={e => setCoupon(e.target.value)} placeholder="Enter promo code" aria-label="Promo code"/><button className="pd-btn-sm">Apply</button></form>}
-          {promoMsg && promoOpen && <p className={promoMsg.ok ? 'pd-ok' : 'pd-err'}>{promoMsg.text}</p>}</div>
+        <SavingZone applied={coupon && promoMsg?.ok ? coupon : ''} refreshKey={bag}
+          onApply={async c => { try { const q = await api<Quote>('quote/', 'POST', {coupon: c}); setQuote(q); write(COUPON_KEY, c); setCoupon(c); setPromoMsg({ok: true, text: `You save ${money(q.discount)}`}); } catch (e2) { setPromoMsg({ok: false, text: err(e2)}); } }}
+          onRemove={async () => { write(COUPON_KEY, ''); setCoupon(''); setPromoMsg(null); try { setQuote(await api<Quote>('quote/', 'POST', {})); } catch {} }} message={promoMsg}/>
         <div className="co-help"><span className="co-help-icon"><Headphones size={22}/></span><div><strong>Need help with your order?</strong><p>We’re here to assist you.</p>
           {site.phone && <a href={`tel:+${site.phone.replace(/\D/g, '')}`}><Phone size={17}/> +{site.phone.replace(/\D/g, '')}</a>}
           {site.email && <a href={`mailto:${site.email}`}><Mail size={17}/> {site.email}</a>}</div></div>

@@ -11,8 +11,8 @@ class PageQuestionInline(admin.TabularInline):
     model=PageQuestion;extra=1;fields=['kind','question','answer','sort_order','active'];verbose_name_plural='FAQs & guide entries for this category (leave empty to use the defaults)'
 @admin.register(Collection)
 class CollectionAdmin(admin.ModelAdmin):
-    prepopulated_fields={'slug':('name',)};list_display=['name','active'];inlines=[PageQuestionInline]
-    fieldsets=((None,{'fields':('name','slug','description','image','active')}),
+    prepopulated_fields={'slug':('name',)};list_display=['name','parent','sort_order','active'];list_editable=['parent','sort_order','active'];list_filter=['parent'];inlines=[PageQuestionInline]
+    fieldsets=((None,{'fields':('name','slug','parent','sort_order','description','image','active')}),
                ('SEO',{'fields':('seo_title','seo_description')}),
                ('Category page text (leave blank to use the defaults in Site settings; {name} = collection name)',{'fields':('hero_eyebrow','hero_tagline','seo_heading','seo_body')}))
 @admin.register(PageQuestion)
@@ -45,13 +45,18 @@ class SettingsAdmin(admin.ModelAdmin):
     fieldsets=((None,{'fields':('name','announcement','hero_title','hero_description','hero_image')}),
                ('Contact',{'fields':('phone','email','address','delivery_message')}),
                ('Size guide popup',{'fields':('size_guide_note','size_chart_pdf')}),
+               ('Appointments (Calendly)',{'fields':('calendly_url','calendly_primary_color','calendly_text_color','calendly_background_color')}),
+               ('Footer & social links',{'fields':('footer_tagline','instagram_url','facebook_url','youtube_url','pinterest_url')}),
                ('Checkout',{'fields':('shipping_fee','free_shipping_above','cod_enabled')}),
                ('Category page defaults ({name} = collection name)',{'fields':('category_tagline','category_seo_heading','category_seo_body')}),
                ('Fitting banner (all category pages)',{'fields':('fitting_title','fitting_text','fitting_button','fitting_steps','fitting_image')}),
                ('All Products page (/products)',{'fields':('shop_eyebrow','shop_title','shop_text','shop_image','shop_heading','shop_subheading','shop_fitting_title','shop_fitting_text','shop_fitting_note','shop_fitting_image','shop_trust')}))
     def has_add_permission(self,request):return not SiteSettings.objects.exists()
     def has_delete_permission(self,*args):return False
-admin.site.register([AppointmentSlot,Coupon,Subscriber,Page])
+admin.site.register([AppointmentSlot,Subscriber,Page])
+@admin.register(Coupon)
+class CouponAdmin(admin.ModelAdmin):
+    list_display=['code','percent','minimum','description','public','active','expires_at'];list_editable=['public','active'];search_fields=['code']
 
 @admin.register(Occasion)
 class OccasionAdmin(admin.ModelAdmin):
@@ -63,7 +68,7 @@ class MenuLinkInline(admin.TabularInline):model=MenuLink;extra=1;fields=['group'
 @admin.register(MenuItem)
 class MenuItemAdmin(admin.ModelAdmin):
     list_display=['label','url','sort_order','active'];list_editable=['sort_order','active'];inlines=[MenuLinkInline]
-    fieldsets=((None,{'fields':('label','url','sort_order','active','show_occasions')}),('Feature picture (right side of the dropdown)',{'fields':('feature_title','feature_image','feature_url')}))
+    fieldsets=((None,{'fields':('label','url','sort_order','active','auto_styles','show_occasions')}),('Feature picture (right side of the dropdown)',{'fields':('feature_title','feature_image','feature_url')}))
 class HomeCardInline(admin.StackedInline):
     model=HomeCard;extra=0
     fields=[('title','label','sort_order','active'),('caption','url','button_label','icon'),'text','bullets',('image','image_path')]

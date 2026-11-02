@@ -50,7 +50,10 @@ export default async function CollectionPage({params, searchParams}: Props) {
     get<Site>('site/').catch(() => null),
   ]);
   const base = `/collections/${slug}`;
-  const styles = styleLinks(site?.menu?.length ? site.menu : mainMenu, base);
+  // Sidebar 'Collection' list: collections that have products in this category (with counts),
+  // otherwise this category's menu styles.
+  const related = (facets.collections || []).filter(c => c.slug !== slug).map(c => ({label: c.name, href: `/collections/${c.slug}`, count: c.count}));
+  const styles = related.length ? related : styleLinks(site?.menu?.length ? site.menu : mainMenu, base);
   // Occasion cards: occasions that have products here; if none do yet, every active occasion.
   const withProducts = facets.occasions.filter(o => o.count);
   const occasionCards = (withProducts.length ? withProducts : (site?.occasions || facets.occasions)).slice(0, 4);

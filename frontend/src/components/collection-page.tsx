@@ -6,7 +6,7 @@ import {useState} from 'react';
 import {Heart, ChevronUp, ArrowDown, ArrowUpRight, ArrowLeft, ArrowRight, LayoutGrid, List, Search} from 'lucide-react';
 import {api} from '@/lib/client';
 import {useWishlist} from '@/lib/wishlist';
-import {Product, ProductPage, Facets, money, photo} from '@/lib/types';
+import {Product, ProductPage, Facets, money, photo, discount} from '@/lib/types';
 import type {MenuLink} from '@/lib/menu';
 import {type Query, list, toParams} from '@/lib/query';
 
@@ -52,7 +52,7 @@ export function Filters({base, query, styles = [], facets, variant = 'category'}
     <div className="cp-filters-head"><h2><button type="button" className="cp-filter-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>Filters<ChevronUp size={18} className={open ? '' : 'flip'}/></button></h2>{active && <Link href={`${base}#collection`} scroll={false}>Clear all</Link>}</div>
     {variant === 'shop'
       ? <>{category}{occasion}{colour}{size}{priceRanges || priceInputs}</>
-      : <>{occasion}{size}{colour}{priceInputs}{styles.length > 0 && <Group title="Collection">{styles.map(s => <Link key={s.href} href={s.href} className="cp-collection-link">{s.label}</Link>)}</Group>}</>}
+      : <>{occasion}{size}{colour}{priceInputs}{styles.length > 0 && <Group title="Collection">{styles.map(s => <Link key={s.href} href={s.href} className="cp-collection-link"><span>{s.label}</span>{typeof s.count === 'number' && <em className="cp-count">{s.count}</em>}</Link>)}</Group>}</>}
     <Link href="/info/size-guide" className="cp-size-guide">Size Guide <ArrowUpRight size={16}/></Link>
   </aside>;
 }
@@ -68,7 +68,7 @@ function WishHeart({id, slug}: {id: number; slug: string}) {
 
 function Card({p, hex}: {p: Product; hex: Record<string, string>}) {
   const colours = [...new Set(p.variants.map(v => v.colour.trim()).filter(Boolean).map(c => c.toLowerCase()))];
-  const off = Number(p.mrp) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.mrp)) * 100) : 0;
+  const off = discount(p);
   return <article className="cp-card">
     <div className="cp-photo">
       <Link href={`/products/${p.slug}`} aria-label={p.name}><Image src={photo(p)} alt={p.images[0]?.alt || p.name} fill sizes="(max-width:700px) 46vw, (max-width:1100px) 30vw, 22vw"/></Link>

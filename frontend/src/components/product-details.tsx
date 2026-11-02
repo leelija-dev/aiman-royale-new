@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {useEffect, useRef, useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {Heart, ShoppingBag, ArrowRight, Check, X, ZoomIn, Minus, Plus, Ruler, TicketPercent, ChevronDown, Star, PencilLine, CircleAlert, Shirt} from 'lucide-react';
-import {Bag, Product, money, photo} from '@/lib/types';
+import {Bag, Product, money, photo, discount} from '@/lib/types';
 import {api, bagChanged, err} from '@/lib/client';
 import {useWishlist} from '@/lib/wishlist';
 
@@ -34,8 +34,8 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
   const [tab, setTab] = useState('details'), [pageUrl, setPageUrl] = useState('');
   useEffect(() => setPageUrl(window.location.href.split('#')[0]), []);
   const measureRef = useRef<HTMLDivElement>(null), popupBtn = useRef<HTMLAnchorElement | HTMLButtonElement>(null);
-  const off = Number(p.mrp) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.mrp)) * 1000) / 10 : 0;
-  const maxQty = Math.max(1, Math.min(variant?.stock || 1, 10));
+  const off = discount(p);
+  const maxQty = Math.max(1, variant?.stock || 1);
   const images = p.images.length ? p.images : [{id: 0, url: photo(p), alt: p.name}];
 
   useEffect(() => { if (popup) popupBtn.current?.focus(); }, [popup]);
@@ -100,7 +100,17 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
     setMSaved(true); setType('custom'); setMMsg('Saved. These measurements will be added to this style when you add it to your bag.');
   }
 
-  const waText = `Hello Aiman Royale, I'd like to order:\n${p.name}\nSize: ${variant?.size || '-'} · Colour: ${colour} · Qty: ${qty}${type === 'custom' ? ' · Custom measurements' : ''}\n${pageUrl}`;
+  const origin = pageUrl ? new URL(pageUrl).origin : '';
+  const absImage = images[image]?.url ? (images[image].url.startsWith('http') ? images[image].url : origin + images[image].url) : '';
+  const waText = [
+    "Hello Aiman Royale, I'd like to order:",
+    `*${p.name}*`,
+    `Price: ${money(Number(p.price) * qty)}${off > 0 ? ` (MRP ${money(Number(p.mrp) * qty)}, ${off}% off)` : ''}${qty > 1 ? ` for ${qty} pieces` : ''}`,
+    `Size: ${variant?.size || 'not selected'} · Colour: ${colour} · Qty: ${qty}`,
+    `Type: ${type === 'custom' ? `Custom measurements${mSaved ? ` (bust ${m.bust}, waist ${m.waist}, hip ${m.hip}, armhole ${m.armhole} ${m.unit})` : ''}` : 'Stitched'}`,
+    absImage && `Photo: ${absImage}`,
+    `Product link: ${pageUrl}`,
+  ].filter(Boolean).join('\n');
   const waHref = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(waText)}`;
 
   return <>
