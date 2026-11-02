@@ -30,6 +30,18 @@ class SiteSettings(models.Model):
     fitting_button=models.CharField('Fitting banner button',max_length=40,default='Book a Fitting')
     fitting_steps=models.CharField('Fitting banner steps',max_length=200,default='Choose a date.|Meet our team.|Find your fit.',help_text='Separate steps with |')
     fitting_image=models.ImageField('Fitting banner image',upload_to='editorial/',blank=True)
+    # All Products page (/products)
+    shop_eyebrow=models.CharField('Banner small heading',max_length=80,default='The Aiman Royale Collection')
+    shop_title=models.CharField('Banner title',max_length=160,default='Find your occasion.\nDiscover your style.')
+    shop_text=models.CharField('Banner text',max_length=300,default='Explore designer ethnic wear, from statement Anarkalis to festive suits and elegant occasion wear.')
+    shop_image=models.ImageField('Banner image',upload_to='editorial/',blank=True)
+    shop_heading=models.CharField('Product list heading',max_length=80,default='All Products')
+    shop_subheading=models.CharField('Product list subheading',max_length=120,default='Explore the collection')
+    shop_fitting_title=models.CharField('Fitting banner title',max_length=160,default='Love the dress.\nLet’s find your fit.')
+    shop_fitting_text=models.CharField('Fitting banner text',max_length=300,default='Speak with our team about sizing, styling and your occasion before you choose.')
+    shop_fitting_note=models.CharField('Fitting banner note',max_length=160,default='Choose a date and request your appointment.')
+    shop_fitting_image=models.ImageField('Fitting banner image',upload_to='editorial/',blank=True)
+    shop_trust=models.TextField('Trust strip',default='Personal Fit Guidance|Expert advice for your perfect look\nDesigner Ethnic Wear|Curated for every occasion\nSecure Shopping|Safe & trusted payments',help_text='One per line: Title|Small text')
     @classmethod
     def current(cls): return cls.objects.get_or_create(pk=1)[0]
     def save(self,*args,**kwargs): self.pk=1;super().save(*args,**kwargs)

@@ -209,3 +209,21 @@ class HomepageTests(TestCase):
         self.assertEqual(d[-1]['kind'],'hero');self.assertNotIn('story',[x['kind'] for x in d])
         consult=[x for x in d if x['kind']=='consult'][0]
         self.assertEqual(consult['cards'][0]['title'],'Custom title');self.assertEqual(len(consult['cards'][0]['bullets']),3)
+
+
+class AllProductsPageTests(TestCase):
+    def test_category_and_price_range_filters(self):
+        from shop.models import Collection, Product
+        a=Collection.objects.create(name='Anarkali',slug='anarkali-t');b=Collection.objects.create(name='Lehenga',slug='lehenga-t')
+        p1=Product.objects.create(name='P1',slug='p1',price=4000,mrp=5000);p1.collections.add(a)
+        p2=Product.objects.create(name='P2',slug='p2',price=9000,mrp=12000);p2.collections.add(b)
+        p3=Product.objects.create(name='P3',slug='p3',price=12000,mrp=15000);p3.collections.add(b)
+        slugs=lambda u:{x['slug'] for x in self.client.get(u).json()['results']}
+        self.assertEqual(slugs('/api/products/?collection=anarkali-t&collection=lehenga-t'),{'p1','p2','p3'})
+        self.assertEqual(slugs('/api/products/?price=-5000&price=8000-10000'),{'p1','p2'})
+        f=self.client.get('/api/facets/').json()
+        self.assertEqual({c['slug']:c['count'] for c in f['collections']},{'lehenga-t':2,'anarkali-t':1})
+        self.assertEqual([(r['value'],r['count']) for r in f['price_ranges']],[('-5000',1),('8000-10000',1),('10000-15000',1)])
+        self.assertEqual(f['price_ranges'][0]['label'],'Below ₹5,000')
+        site=self.client.get('/api/site/').json()['shop_page']
+        self.assertEqual(site['heading'],'All Products');self.assertEqual(len(site['trust']),3)

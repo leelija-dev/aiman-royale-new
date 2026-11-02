@@ -84,7 +84,7 @@ export default async function CollectionPage({params, searchParams}: Props) {
 
     <section id="collection" className="cp-wrap cp-shop">
       <Filters base={base} query={q} styles={styles} facets={facets}/>
-      <Results key={apiQuery.toString()} data={data} query={q} base={base} extra={{collection: slug}}/>
+      <Results key={apiQuery.toString()} data={data} query={q} base={base} extra={{collection: slug}} facets={facets}/>
     </section>
 
     <section className="cp-fitting">
