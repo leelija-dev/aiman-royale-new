@@ -99,6 +99,29 @@ class CommerceTests(TestCase):
         self.assertEqual(first.json()['amount'],400000)
         again=self.client.post('/api/checkout/',data,format='json');self.assertEqual(again.status_code,200)
         self.assertEqual(first.json()['order']['id'],again.json()['order']['id']);gateway.assert_called_once()
+    @override_settings(CASHFREE_APP_ID='test_app',CASHFREE_SECRET_KEY='test-secret')
+    @patch('shop.services.gateway')
+    def test_checkout_saves_note_and_opens_chosen_payment_option(self,gateway):
+        gateway.side_effect=lambda method,path,payload,idempotency_key: {'order_id':payload['order_id'],'payment_session_id':'session_test'}
+        data={'key':str(uuid.uuid4()),'address':self.address,'consent':True,'method':'cashfree','pay_with':'upi','note':'Gift wrap please'}
+        r=self.client.post('/api/checkout/',data,format='json');self.assertEqual(r.status_code,200)
+        self.assertEqual(r.json()['order']['note'],'Gift wrap please')
+        self.assertEqual(gateway.call_args[0][2]['order_meta']['payment_methods'],'upi')
+        bad=self.client.post('/api/checkout/',{**data,'key':str(uuid.uuid4()),'pay_with':'bitcoin'},format='json');self.assertEqual(bad.status_code,400)
+    def test_guest_can_preview_bag_total_with_coupon(self):
+        from shop.models import Coupon
+        Coupon.objects.create(code='FEST10',percent=10)
+        guest=APIClient();guest.post('/api/cart/',{'variant':self.v.id,'quantity':1},format='json')
+        r=guest.post('/api/quote/',{'coupon':'fest10'},format='json')
+        self.assertEqual(r.status_code,200);self.assertEqual(Decimal(r.json()['discount']),Decimal('200'))
+    def test_reviews_need_sign_in_and_approval(self):
+        from shop.models import Review
+        guest=APIClient()
+        self.assertEqual(guest.post('/api/products/test-suit/reviews/',{'rating':5,'text':'Beautiful work'},format='json').status_code,401)
+        r=self.client.post('/api/products/test-suit/reviews/',{'rating':5,'text':'Beautiful work and fit'},format='json');self.assertEqual(r.status_code,201)
+        self.assertEqual(guest.get('/api/products/test-suit/reviews/').json()['count'],0)
+        Review.objects.update(approved=True)
+        d=guest.get('/api/products/test-suit/reviews/').json();self.assertEqual(d['count'],1);self.assertEqual(d['average'],5.0)
     def test_password_reset_sends_valid_account_email(self):
         from django.core import mail
         r=self.client.post('/accounts/password_reset/',{'email':'test@example.com'})

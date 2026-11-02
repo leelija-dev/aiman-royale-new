@@ -26,6 +26,7 @@ def gateway(method,path,payload=None,idempotency_key=None):
     except (requests.RequestException,ValueError):
         raise ProviderUnavailable('Cashfree could not be reached. Your order is saved. Retry this checkout with the same order reference; do not start another payment if charged.')
 
+PAY_WITH={'upi':'upi','card':'cc,dc','netbanking':'nb'}
 def cashfree_session(order):
     if order.payment_method!='cashfree':raise ValidationError('This order does not use Cashfree.')
     if order.status!='pending':return ''
@@ -42,6 +43,9 @@ def cashfree_session(order):
         'customer_details':{'customer_id':'customer_'+str(order.user_id),'customer_name':order.address['name'],'customer_email':order.address['email'],'customer_phone':order.address['phone']},
         'order_expiry_time':order.expires_at.isoformat(),
         'order_meta':{'return_url':settings.PUBLIC_SITE_URL+'/payment/return?order='+str(order.id)}}
+    # Open Cashfree on the option the customer picked (all options if none).
+    methods=PAY_WITH.get(order.pay_with)
+    if methods:payload['order_meta']['payment_methods']=methods
     result=gateway('POST','orders',payload,idempotency_key=order.idempotency_key)
     if result.get('order_id')!=provider_id or not result.get('payment_session_id'):
         raise ProviderUnavailable('Cashfree returned an invalid checkout session. Contact the studio with your order reference.')

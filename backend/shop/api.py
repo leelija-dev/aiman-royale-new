@@ -8,7 +8,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from django.db import transaction,IntegrityError
-from django.db.models import Q,Count,Min,Max
+from django.db.models import Q,Count,Min,Max,Avg
 from django.utils.text import slugify
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
@@ -52,7 +52,7 @@ def merge_cart(request,old_key):
 @api_view(['GET'])
 def site(request):
     s=SiteSettings.current()
-    return Response({'name':s.name,'announcement':s.announcement,'hero_title':s.hero_title,'hero_description':s.hero_description,'hero_image':s.hero_image.url if s.hero_image else '/images/hero.webp','phone':s.phone,'email':s.email,'address':s.address,'cod_enabled':s.cod_enabled,'payment_ready':bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY),'whatsapp_ready':bool(settings.WHATSAPP_TOKEN and settings.WHATSAPP_PHONE_ID and settings.WHATSAPP_OTP_TEMPLATE and settings.WHATSAPP_GRAPH_VERSION),'collections':CollectionSerializer(Collection.objects.filter(active=True),many=True).data,'menu':menu_data(),'shop_page':shop_page(s),'occasions':[occasion_data(o) for o in Occasion.objects.filter(active=True)]})
+    return Response({'name':s.name,'announcement':s.announcement,'hero_title':s.hero_title,'hero_description':s.hero_description,'hero_image':s.hero_image.url if s.hero_image else '/images/hero.webp','phone':s.phone,'email':s.email,'address':s.address,'cod_enabled':s.cod_enabled,'payment_ready':bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY),'whatsapp_ready':bool(settings.WHATSAPP_TOKEN and settings.WHATSAPP_PHONE_ID and settings.WHATSAPP_OTP_TEMPLATE and settings.WHATSAPP_GRAPH_VERSION),'collections':CollectionSerializer(Collection.objects.filter(active=True),many=True).data,'menu':menu_data(),'delivery_message':s.delivery_message,'shop_page':shop_page(s),'occasions':[occasion_data(o) for o in Occasion.objects.filter(active=True)]})
 PRICE_STEPS=[5000,8000,10000,15000,20000,30000]
 SIZE_ORDER=['XXS','XS','S','M','L','XL','XXL','2XL','3XL','4XL','5XL','FREE']
 def media_url(f):return f.url if f else ''
@@ -109,6 +109,23 @@ def facets(request):
                      'price_ranges':buckets,
                      'collections':[{'name':c.name,'slug':c.slug,'count':c.n} for c in cols],
                      'count':len(ids)})
+@api_view(['GET','POST'])
+def reviews(request,slug):
+    """Approved reviews for a product; signed-in customers can submit one (held for approval)."""
+    p=get_object_or_404(Product,slug=slug,active=True)
+    if request.method=='POST':
+        if not request.user.is_authenticated:return Response({'error':'Please sign in to write a review.'},status=401)
+        try:rating=int(request.data.get('rating',0))
+        except (TypeError,ValueError):rating=0
+        text=str(request.data.get('text','')).strip()
+        if not 1<=rating<=5 or len(text)<10:raise ValidationError('Choose a rating and write at least 10 characters.')
+        name=(request.user.first_name or request.user.email.split('@')[0])[:80]
+        Review.objects.update_or_create(product=p,user=request.user,defaults={'name':name,'rating':rating,'text':text[:2000],'approved':False})
+        return Response({'message':'Thank you! Your review will appear once our team has approved it.'},status=201)
+    q=p.reviews.filter(approved=True)
+    agg=q.aggregate(avg=Avg('rating'),n=Count('id'))
+    return Response({'average':round(agg['avg'],1) if agg['avg'] else None,'count':agg['n'],
+                     'reviews':[{'name':r.name,'rating':r.rating,'text':r.text,'date':r.created_at.date().isoformat()} for r in q[:50]]})
 @api_view(['GET'])
 def home(request):
     """Homepage sections in display order, managed in admin (Homepage sections)."""
@@ -278,7 +295,6 @@ def wishlist(request):
         else:Wishlist.objects.filter(user=request.user,product=p).delete()
     return Response(ProductSerializer(Product.objects.filter(wishlist__user=request.user).prefetch_related('images','variants','collections'),many=True).data)
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
 def quote(request):
     items=list(get_cart(request).items.select_related('variant__product'))
     if not items:raise ValidationError('Your bag is empty.')
@@ -294,7 +310,13 @@ def checkout(request):
     if method not in ['cashfree','cod']:raise ValidationError('Unknown payment method.')
     if method=='cod' and not SiteSettings.current().cod_enabled:raise ValidationError('Cash on delivery is not available.')
     if method=='cashfree' and not (settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY):raise ProviderUnavailable('Online payments are not configured. Your bag has been kept unchanged.')
+    pay_with=str(request.data.get('pay_with','') or '')
+    if pay_with and pay_with not in PAY_WITH:raise ValidationError('Unknown payment option.')
+    note=str(request.data.get('note','') or '').strip()[:500]
     o,created=reserve_order(request.user,get_cart(request),address.validated_data,key,str(request.data.get('coupon','')),method)
+    if created and (note or pay_with):
+        o.note,o.pay_with=note,(pay_with if method=='cashfree' else '')
+        o.save(update_fields=['note','pay_with'])
     session=cashfree_session(o) if method=='cashfree' else ''
     return Response({'order':OrderSerializer(o).data,'payment_session_id':session,'mode':settings.CASHFREE_ENVIRONMENT,'amount':int(o.total*100)})
 @api_view(['POST'])
