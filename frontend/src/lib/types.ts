@@ -1,8 +1,11 @@
+import type {MenuItem} from './menu';
 export type Collection={id:number;name:string;slug:string;description:string;image:string;seo_title:string;seo_description:string};
 export type Variant={id:number;sku:string;size:string;colour:string;stock:number};
 export type Product={id:number;name:string;slug:string;description:string;care:string;fabric:string;occasions:string[];price:string;mrp:string;featured:boolean;custom_fit:boolean;images:{id:number;url:string;alt:string}[];variants:Variant[];collections:Collection[];seo_title:string;seo_description:string;updated_at:string};
 export type ProductPage={count:number;page:number;pages:number;results:Product[]};
-export type Site={name:string;announcement:string;hero_title:string;hero_description:string;hero_image:string;phone:string;email:string;address:string;cod_enabled:boolean;payment_ready:boolean;whatsapp_ready:boolean;collections:Collection[]};
+export type Site={name:string;announcement:string;hero_title:string;hero_description:string;hero_image:string;phone:string;email:string;address:string;cod_enabled:boolean;payment_ready:boolean;whatsapp_ready:boolean;collections:Collection[];menu?:MenuItem[];occasions?:Occasion[]};
+export type Occasion={name:string;slug:string;image:string;count?:number};
+export type Facets={occasions:Occasion[];sizes:string[];colours:{name:string;hex:string;count:number}[];price:{min:number|string;max:number|string};count:number};
 export type CartItem={id:number;variant:Variant;product:Product;quantity:number;measurements:Record<string,string>};
 export type Bag={items:CartItem[];subtotal:string};
 export type User={id:number;name:string;email:string;phone:string|null};

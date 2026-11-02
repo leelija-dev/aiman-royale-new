@@ -141,12 +141,38 @@ class CommerceTests(TestCase):
 class MultiValueFilterTests(TestCase):
     def test_occasion_and_colour_accept_several_values(self):
         from shop.models import Product, Variant
-        a=Product.objects.create(name='A',slug='a',price=1000,mrp=2000,occasions=['Haldi'])
-        b=Product.objects.create(name='B',slug='b',price=1000,mrp=2000,occasions=['Party'])
-        Product.objects.create(name='C',slug='c',price=1000,mrp=2000,occasions=['Festive'])
+        from shop.models import Occasion
+        occ={n:Occasion.objects.get_or_create(name=n,defaults={'slug':n.lower()})[0] for n in ['Haldi','Party','Festive']}
+        a=Product.objects.create(name='A',slug='a',price=1000,mrp=2000);a.occasions.add(occ['Haldi'])
+        b=Product.objects.create(name='B',slug='b',price=1000,mrp=2000);b.occasions.add(occ['Party'])
+        c=Product.objects.create(name='C',slug='c',price=1000,mrp=2000);c.occasions.add(occ['Festive'])
         Variant.objects.create(product=a,sku='A-M',size='M',colour='Maroon',stock=2)
         Variant.objects.create(product=b,sku='B-S',size='S',colour='Wine',stock=2)
         r=self.client.get('/api/products/?occasion=Haldi&occasion=Party')
         self.assertEqual({x['slug'] for x in r.json()['results']},{'a','b'})
         r=self.client.get('/api/products/?colour=maroon&colour=wine&size=M&size=S')
         self.assertEqual({x['slug'] for x in r.json()['results']},{'a','b'})
+
+    def test_facets_and_menu_come_from_the_database(self):
+        from shop.models import Occasion, Colour, MenuItem, MenuLink, Collection, Product, Variant
+        col=Collection.objects.create(name='Gown',slug='gown-test')
+        party=Occasion.objects.get_or_create(name='Party',defaults={'slug':'party'})[0]
+        Occasion.objects.create(name='Mehendi',slug='mehendi',sort_order=1)
+        p=Product.objects.create(name='G',slug='g',price=1500,mrp=3000);p.collections.add(col);p.occasions.add(party)
+        Variant.objects.create(product=p,sku='G-L',size='L',colour='teal',stock=1)
+        Variant.objects.create(product=p,sku='G-S',size='S',colour='Teal',stock=1)
+        Colour.objects.create(name='Teal',hex='#008080')
+        f=self.client.get('/api/facets/?collection=gown-test').json()
+        counts={o['name']:o['count'] for o in f['occasions']}
+        self.assertEqual([o['name'] for o in f['occasions']][:2],['Haldi','Mehendi'])
+        self.assertEqual(counts['Party'],1);self.assertEqual(counts['Mehendi'],0)
+        self.assertEqual(f['sizes'],['S','L'])
+        self.assertEqual(f['colours'],[{'name':'Teal','hex':'#008080','count':1}])
+        self.assertEqual(float(f['price']['min']),1500.0)
+        MenuItem.objects.all().delete()
+        m=MenuItem.objects.create(label='Gown',url='/collections/gown-test')
+        MenuLink.objects.create(item=m,group='Style',label='Party Gowns',url='/x')
+        menu=self.client.get('/api/site/').json()['menu']
+        self.assertEqual(menu[0]['label'],'Gown')
+        self.assertEqual([c['title'] for c in menu[0]['columns']],['Style','Occasion'])
+        self.assertIn({'label':'Mehendi','href':'/collections/gown-test?occasion=mehendi'},menu[0]['columns'][1]['links'])

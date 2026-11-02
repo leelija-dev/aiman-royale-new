@@ -6,7 +6,7 @@ class ImageInline(admin.TabularInline):model=ProductImage;extra=1
 class VariantInline(admin.TabularInline):model=Variant;extra=1
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display=['name','price','active','featured'];list_filter=['active','featured','collections'];search_fields=['name','slug'];prepopulated_fields={'slug':('name',)};filter_horizontal=['collections'];inlines=[ImageInline,VariantInline]
+    list_display=['name','price','active','featured'];list_filter=['active','featured','collections','occasions'];search_fields=['name','slug'];prepopulated_fields={'slug':('name',)};filter_horizontal=['collections','occasions'];inlines=[ImageInline,VariantInline]
 @admin.register(Collection)
 class CollectionAdmin(admin.ModelAdmin):prepopulated_fields={'slug':('name',)};list_display=['name','active']
 @admin.register(Customer)
@@ -36,3 +36,15 @@ class SettingsAdmin(admin.ModelAdmin):
     def has_add_permission(self,request):return not SiteSettings.objects.exists()
     def has_delete_permission(self,*args):return False
 admin.site.register([AppointmentSlot,Coupon,Subscriber,Page])
+
+@admin.register(Occasion)
+class OccasionAdmin(admin.ModelAdmin):
+    list_display=['name','slug','sort_order','active'];list_editable=['sort_order','active'];prepopulated_fields={'slug':('name',)}
+@admin.register(Colour)
+class ColourAdmin(admin.ModelAdmin):
+    list_display=['name','hex','sort_order'];list_editable=['hex','sort_order'];search_fields=['name']
+class MenuLinkInline(admin.TabularInline):model=MenuLink;extra=1;fields=['group','label','url','sort_order']
+@admin.register(MenuItem)
+class MenuItemAdmin(admin.ModelAdmin):
+    list_display=['label','url','sort_order','active'];list_editable=['sort_order','active'];inlines=[MenuLinkInline]
+    fieldsets=((None,{'fields':('label','url','sort_order','active','show_occasions')}),('Feature picture (right side of the dropdown)',{'fields':('feature_title','feature_image','feature_url')}))

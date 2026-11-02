@@ -36,6 +36,47 @@ class Collection(models.Model):
     active=models.BooleanField(default=True)
     def __str__(self):return self.name
 
+class Occasion(models.Model):
+    """Shown in category filters, 'Shop by Occasion' cards and the mega menu."""
+    name=models.CharField(max_length=60,unique=True)
+    slug=models.SlugField(unique=True)
+    image=models.ImageField(upload_to='occasions/',blank=True,help_text='Card image for "Shop by Occasion".')
+    sort_order=models.PositiveIntegerField(default=0)
+    active=models.BooleanField(default=True)
+    class Meta:ordering=['sort_order','name']
+    def __str__(self):return self.name
+
+class Colour(models.Model):
+    """Swatch colours for the filter. Names must match the colour written on product variants."""
+    name=models.CharField(max_length=40,unique=True)
+    hex=models.CharField('Swatch colour',max_length=7,default='#999999',help_text='e.g. #6b1426')
+    sort_order=models.PositiveIntegerField(default=0)
+    class Meta:ordering=['sort_order','name']
+    def __str__(self):return self.name
+
+class MenuItem(models.Model):
+    """Top-level item in the main menu (Wedding, Bridal, ...)."""
+    label=models.CharField(max_length=40)
+    url=models.CharField(max_length=200,help_text='e.g. /collections/salwar-kameez')
+    sort_order=models.PositiveIntegerField(default=0)
+    active=models.BooleanField(default=True)
+    show_occasions=models.BooleanField(default=True,help_text='Add an "Occasion" tab listing every active occasion automatically.')
+    feature_title=models.CharField(max_length=60,blank=True)
+    feature_image=models.ImageField(upload_to='menu/',blank=True)
+    feature_url=models.CharField(max_length=200,blank=True)
+    class Meta:ordering=['sort_order','id']
+    def __str__(self):return self.label
+
+class MenuLink(models.Model):
+    GROUPS=[('Style','Style'),('Occasion','Occasion'),('Collection','Collection')]
+    item=models.ForeignKey(MenuItem,on_delete=models.CASCADE,related_name='links')
+    group=models.CharField(max_length=20,choices=GROUPS,default='Style')
+    label=models.CharField(max_length=60)
+    url=models.CharField(max_length=200)
+    sort_order=models.PositiveIntegerField(default=0)
+    class Meta:ordering=['sort_order','id']
+    def __str__(self):return f'{self.item} › {self.group} › {self.label}'
+
 class Product(models.Model):
     name=models.CharField(max_length=180)
     slug=models.SlugField(unique=True,max_length=200)
@@ -43,7 +84,7 @@ class Product(models.Model):
     care=models.TextField(blank=True)
     fabric=models.CharField(max_length=100,blank=True)
     collections=models.ManyToManyField(Collection,related_name='products')
-    occasions=models.JSONField(default=list,blank=True)
+    occasions=models.ManyToManyField(Occasion,related_name='products',blank=True)
     price=models.DecimalField(max_digits=10,decimal_places=2,validators=[MinValueValidator(Decimal('1'))])
     mrp=models.DecimalField(max_digits=10,decimal_places=2,validators=[MinValueValidator(Decimal('1'))])
     featured=models.BooleanField(default=False)

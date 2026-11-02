@@ -9,6 +9,7 @@ class VariantSerializer(serializers.ModelSerializer):
 class CollectionSerializer(serializers.ModelSerializer):
     class Meta:model=Collection;fields=['id','name','slug','description','image','seo_title','seo_description']
 class ProductSerializer(serializers.ModelSerializer):
+    occasions=serializers.SlugRelatedField(slug_field='name',many=True,read_only=True)
     images=ImageSerializer(many=True,read_only=True)
     variants=VariantSerializer(many=True,read_only=True)
     collections=CollectionSerializer(many=True,read_only=True)
