@@ -3,7 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {useState} from 'react';
-import {Heart, ChevronUp, ArrowDown, ArrowUpRight, LayoutGrid, List} from 'lucide-react';
+import {Heart, ChevronUp, ArrowDown, ArrowUpRight, ArrowLeft, ArrowRight, LayoutGrid, List, Search} from 'lucide-react';
 import {api, err} from '@/lib/client';
 import {Product, ProductPage, Facets, money, photo} from '@/lib/types';
 import type {MenuLink} from '@/lib/menu';
@@ -18,7 +18,7 @@ function Group({title, children}: {title: string; children: React.ReactNode}) {
   </div>;
 }
 
-export function Filters({base, query, styles, facets}: {base: string; query: Query; styles: MenuLink[]; facets: Facets}) {
+export function Filters({base, query, styles = [], facets, variant = 'category'}: {base: string; query: Query; styles?: MenuLink[]; facets: Facets; variant?: 'category' | 'shop'}) {
   const router = useRouter();
   const go = (p: URLSearchParams) => { p.delete('page'); router.push(`${base}${p.size ? `?${p}` : ''}#collection`, {scroll: false}); };
   const toggle = (key: string, value: string) => {
@@ -27,22 +27,31 @@ export function Filters({base, query, styles, facets}: {base: string; query: Que
     go(p);
   };
   const has = (key: string, value: string) => list(query[key]).some(v => v.toLowerCase() === value.toLowerCase());
-  const active = ['occasion', 'size', 'colour', 'min', 'max'].some(k => list(query[k]).length);
-  const [open, setOpen] = useState(false);
-  return <aside className={open ? 'cp-filters open' : 'cp-filters'} aria-label="Filters">
-    <div className="cp-filters-head"><h2><button type="button" className="cp-filter-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>Filters<ChevronUp size={18} className={open ? '' : 'flip'}/></button></h2>{active && <Link href={`${base}#collection`} scroll={false}>Clear all</Link>}</div>
-    {facets.occasions.length > 0 && <Group title="Occasion">{facets.occasions.filter(o => o.count || has('occasion', o.slug)).map(o => <label key={o.slug} className="cp-check"><input type="checkbox" checked={has('occasion', o.slug)} onChange={() => toggle('occasion', o.slug)}/>{o.name}<span className="cp-count">{o.count}</span></label>)}</Group>}
-    {facets.sizes.length > 0 && <Group title="Size"><div className="cp-sizes">{facets.sizes.map(s => <button type="button" key={s} aria-pressed={has('size', s)} className={has('size', s) ? 'on' : ''} onClick={() => toggle('size', s)}>{s}</button>)}</div></Group>}
-    {facets.colours.length > 0 && <Group title="Colour">{facets.colours.map(c => <button type="button" key={c.name} className={has('colour', c.name) ? 'cp-colour on' : 'cp-colour'} aria-pressed={has('colour', c.name)} onClick={() => toggle('colour', c.name)}><span style={{background: c.hex}}/>{c.name}<em className="cp-count">{c.count}</em></button>)}</Group>}
-    <Group title="Price">
+  const active = ['occasion', 'size', 'colour', 'min', 'max', 'price', 'collection'].some(k => list(query[k]).length);
+  const [open, setOpen] = useState(false), [allCats, setAllCats] = useState(false);
+  const cats = facets.collections || [];
+  const shownCats = allCats ? cats : cats.slice(0, 7);
+  const Check = ({k, value, label, count}: {k: string; value: string; label: string; count?: number}) =>
+    <label className="cp-check"><input type="checkbox" checked={has(k, value)} onChange={() => toggle(k, value)}/>{label}{count !== undefined && <span className="cp-count">{count}</span>}</label>;
+  const category = cats.length > 0 && <Group title="Category">{shownCats.map(c => <Check key={c.slug} k="collection" value={c.slug} label={c.name} count={c.count}/>)}
+    {cats.length > 7 && <button type="button" className="cp-show-more" onClick={() => setAllCats(!allCats)}>{allCats ? 'Show less' : 'Show more'}</button>}</Group>;
+  const occasion = facets.occasions.length > 0 && <Group title="Occasion">{facets.occasions.filter(o => o.count || has('occasion', o.slug)).map(o => <Check key={o.slug} k="occasion" value={o.slug} label={o.name} count={o.count}/>)}</Group>;
+  const size = facets.sizes.length > 0 && <Group title="Size"><div className="cp-sizes">{facets.sizes.map(s => <button type="button" key={s} aria-pressed={has('size', s)} className={has('size', s) ? 'on' : ''} onClick={() => toggle('size', s)}>{s}</button>)}</div></Group>;
+  const colour = facets.colours.length > 0 && <Group title="Colour">{facets.colours.map(c => <button type="button" key={c.name} className={has('colour', c.name) ? 'cp-colour on' : 'cp-colour'} aria-pressed={has('colour', c.name)} onClick={() => toggle('colour', c.name)}><span style={{background: c.hex}}/>{c.name}<em className="cp-count">{c.count}</em></button>)}</Group>;
+  const priceRanges = (facets.price_ranges || []).length > 0 && <Group title="Price">{facets.price_ranges!.map(r => <Check key={r.value} k="price" value={r.value} label={r.label} count={r.count}/>)}</Group>;
+  const priceInputs = <Group title="Price">
       <form className="cp-price" onSubmit={e => { e.preventDefault(); const f = new FormData(e.currentTarget); const p = toParams(query); for (const k of ['min', 'max']) { p.delete(k); const v = String(f.get(k) || '').trim(); if (v) p.set(k, v); } go(p); }}>
         <input name="min" type="number" min={0} inputMode="numeric" placeholder={`Min ₹${Math.floor(Number(facets.price.min))}`} aria-label="Minimum price" defaultValue={list(query.min)[0]}/>
         <input name="max" type="number" min={0} inputMode="numeric" placeholder={`Max ₹${Math.ceil(Number(facets.price.max))}`} aria-label="Maximum price" defaultValue={list(query.max)[0]}/>
         <button className="button outline small">Apply</button>
       </form>
       {Number(facets.price.max) > 0 && <p className="cp-range">{money(facets.price.min)} – {money(facets.price.max)}</p>}
-    </Group>
-    {styles.length > 0 && <Group title="Collection">{styles.map(s => <Link key={s.href} href={s.href} className="cp-collection-link">{s.label}</Link>)}</Group>}
+    </Group>;
+  return <aside className={open ? 'cp-filters open' : 'cp-filters'} aria-label="Filters">
+    <div className="cp-filters-head"><h2><button type="button" className="cp-filter-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>Filters<ChevronUp size={18} className={open ? '' : 'flip'}/></button></h2>{active && <Link href={`${base}#collection`} scroll={false}>Clear all</Link>}</div>
+    {variant === 'shop'
+      ? <>{category}{occasion}{colour}{size}{priceRanges || priceInputs}</>
+      : <>{occasion}{size}{colour}{priceInputs}{styles.length > 0 && <Group title="Collection">{styles.map(s => <Link key={s.href} href={s.href} className="cp-collection-link">{s.label}</Link>)}</Group>}</>}
     <Link href="/info/size-guide" className="cp-size-guide">Size Guide <ArrowUpRight size={16}/></Link>
   </aside>;
 }
@@ -56,25 +65,30 @@ function WishHeart({id}: {id: number}) {
   </button>;
 }
 
-function Card({p}: {p: Product}) {
+function Card({p, hex}: {p: Product; hex: Record<string, string>}) {
+  const colours = [...new Set(p.variants.map(v => v.colour.trim()).filter(Boolean).map(c => c.toLowerCase()))];
   const off = Number(p.mrp) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.mrp)) * 100) : 0;
   return <article className="cp-card">
     <div className="cp-photo">
       <Link href={`/products/${p.slug}`} aria-label={p.name}><Image src={photo(p)} alt={p.images[0]?.alt || p.name} fill sizes="(max-width:700px) 46vw, (max-width:1100px) 30vw, 22vw"/></Link>
       {off > 0 && <span className="cp-badge">{off}% OFF</span>}
       <WishHeart id={p.id}/>
-      <Link href={`/products/${p.slug}`} className="cp-quick">Quick View</Link>
+      <Link href={`/products/${p.slug}`} className="cp-quick"><Search size={15}/> Quick View</Link>
     </div>
     <div className="cp-info">
       <p className="cp-brand">Aiman Royale</p>
       <h3><Link href={`/products/${p.slug}`}>{p.name}</Link></h3>
+      {colours.length > 0 && <div className="cp-dots" aria-label={`Colours: ${colours.join(', ')}`}>{colours.slice(0, 5).map(c => <span key={c} title={c} style={{background: hex[c] || '#b9aca3'}}/>)}</div>}
       <p className="cp-price-line"><strong>{money(p.price)}</strong>{off > 0 && <del>{money(p.mrp)}</del>}</p>
     </div>
   </article>;
 }
 
 /* ---------- Results: sort, view toggle, grid, load more ---------- */
-export function Results({data, query, base, extra = {}}: {data: ProductPage; query: Query; base: string; extra?: Record<string, string>}) {
+export function Results({data, query, base, extra = {}, facets, heading, subheading, paging = 'more'}: {data: ProductPage; query: Query; base: string; extra?: Record<string, string>;
+  facets?: Facets; heading?: string; subheading?: string; paging?: 'more' | 'pages'}) {
+  const hex = Object.fromEntries((facets?.colours || []).map(c => [c.name.toLowerCase(), c.hex]));
+  const pageUrl = (n: number) => { const p = toParams(query); if (n > 1) p.set('page', String(n)); else p.delete('page'); return `${base}${p.size ? `?${p}` : ''}#collection`; };
   const router = useRouter();
   const [items, setItems] = useState(data.results), [page, setPage] = useState(data.page), [busy, setBusy] = useState(false), [view, setView] = useState<'grid' | 'list'>('grid');
   const sort = list(query.sort)[0] || '';
@@ -85,7 +99,7 @@ export function Results({data, query, base, extra = {}}: {data: ProductPage; que
   };
   return <div className="cp-results">
     <div className="cp-results-head">
-      <h2>The Collection <small>{data.count} {data.count === 1 ? 'style' : 'styles'}</small></h2>
+      <div><h2>{heading || 'The Collection'} <small>{data.count} {data.count === 1 ? 'style' : 'styles'}</small></h2>{subheading && <p className="cp-subheading">{subheading}</p>}</div>
       <div className="cp-tools">
         <select aria-label="Sort by" value={sort} onChange={e => { const p = toParams(query); p.delete('page'); if (e.target.value) p.set('sort', e.target.value); else p.delete('sort'); router.push(`${base}${p.size ? `?${p}` : ''}#collection`, {scroll: false}); }}>
           <option value="">Sort by: Featured</option><option value="newest">Newest first</option><option value="price-asc">Price: Low to High</option><option value="price-desc">Price: High to Low</option>
@@ -94,8 +108,13 @@ export function Results({data, query, base, extra = {}}: {data: ProductPage; que
         <button type="button" aria-label="List view" aria-pressed={view === 'list'} className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}><List size={20}/></button>
       </div>
     </div>
-    {items.length ? <div className={`cp-grid ${view}`}>{items.map(p => <Card key={p.id} p={p}/>)}</div>
+    {items.length ? <div className={`cp-grid ${view}`}>{items.map(p => <Card key={p.id} p={p} hex={hex}/>)}</div>
       : <div className="empty"><h2>A new story is coming.</h2><p>No styles match these filters yet.</p><Link className="button outline" href={`${base}#collection`} scroll={false}>Clear filters</Link></div>}
-    {page < data.pages && <div className="center"><button type="button" className="cp-more" disabled={busy} onClick={more}>{busy ? 'Loading…' : <>Load More Styles <ArrowDown size={17}/></>}</button></div>}
+    {paging === 'pages' && data.pages > 1 && <nav className="cp-pages" aria-label="Product pages">
+      {data.page > 1 ? <Link href={pageUrl(data.page - 1)} scroll={false} aria-label="Previous page"><ArrowLeft size={16}/></Link> : <span aria-hidden><ArrowLeft size={16}/></span>}
+      {Array.from({length: data.pages}, (_, i) => i + 1).map(n => <Link key={n} href={pageUrl(n)} scroll={false} aria-current={n === data.page ? 'page' : undefined} className={n === data.page ? 'on' : ''}>{n}</Link>)}
+      {data.page < data.pages ? <Link href={pageUrl(data.page + 1)} scroll={false} aria-label="Next page"><ArrowRight size={16}/></Link> : <span aria-hidden><ArrowRight size={16}/></span>}
+    </nav>}
+    {paging === 'more' && page < data.pages && <div className="center"><button type="button" className="cp-more" disabled={busy} onClick={more}>{busy ? 'Loading…' : <>Load More Styles <ArrowDown size={17}/></>}</button></div>}
   </div>;
 }

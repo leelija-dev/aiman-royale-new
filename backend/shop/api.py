@@ -52,13 +52,20 @@ def merge_cart(request,old_key):
 @api_view(['GET'])
 def site(request):
     s=SiteSettings.current()
-    return Response({'name':s.name,'announcement':s.announcement,'hero_title':s.hero_title,'hero_description':s.hero_description,'hero_image':s.hero_image.url if s.hero_image else '/images/hero.webp','phone':s.phone,'email':s.email,'address':s.address,'cod_enabled':s.cod_enabled,'payment_ready':bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY),'whatsapp_ready':bool(settings.WHATSAPP_TOKEN and settings.WHATSAPP_PHONE_ID and settings.WHATSAPP_OTP_TEMPLATE and settings.WHATSAPP_GRAPH_VERSION),'collections':CollectionSerializer(Collection.objects.filter(active=True),many=True).data,'menu':menu_data(),'occasions':[occasion_data(o) for o in Occasion.objects.filter(active=True)]})
+    return Response({'name':s.name,'announcement':s.announcement,'hero_title':s.hero_title,'hero_description':s.hero_description,'hero_image':s.hero_image.url if s.hero_image else '/images/hero.webp','phone':s.phone,'email':s.email,'address':s.address,'cod_enabled':s.cod_enabled,'payment_ready':bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY),'whatsapp_ready':bool(settings.WHATSAPP_TOKEN and settings.WHATSAPP_PHONE_ID and settings.WHATSAPP_OTP_TEMPLATE and settings.WHATSAPP_GRAPH_VERSION),'collections':CollectionSerializer(Collection.objects.filter(active=True),many=True).data,'menu':menu_data(),'shop_page':shop_page(s),'occasions':[occasion_data(o) for o in Occasion.objects.filter(active=True)]})
+PRICE_STEPS=[5000,8000,10000,15000,20000,30000]
 SIZE_ORDER=['XXS','XS','S','M','L','XL','XXL','2XL','3XL','4XL','5XL','FREE']
 def media_url(f):return f.url if f else ''
 def occasion_data(o,count=None):
     d={'name':o.name,'slug':o.slug,'image':media_url(o.image)}
     if count is not None:d['count']=count
     return d
+def shop_page(s):
+    """Text for the All Products page (Site settings → All Products page)."""
+    return {'eyebrow':s.shop_eyebrow,'title':s.shop_title,'text':s.shop_text,'image':media_url(s.shop_image),
+            'heading':s.shop_heading,'subheading':s.shop_subheading,
+            'fitting':{'title':s.shop_fitting_title,'text':s.shop_fitting_text,'note':s.shop_fitting_note,'image':media_url(s.shop_fitting_image)},
+            'trust':[{'title':t.strip(),'text':x.strip()} for t,_,x in (l.partition('|') for l in s.shop_trust.splitlines()) if t.strip()]}
 def menu_data():
     """Main menu for the header, managed in admin (Menu items)."""
     occasions=list(Occasion.objects.filter(active=True))
@@ -89,10 +96,18 @@ def facets(request):
         c=colours.setdefault(key,{'name':swatches[key].name if key in swatches else name.strip().title(),'hex':swatches[key].hex if key in swatches else '#b9aca3','products':set(),'order':swatches[key].sort_order if key in swatches else 9999})
         c['products'].add(pid)
     price=base.aggregate(min=Min('price'),max=Max('price'))
+    cols=Collection.objects.filter(active=True).annotate(n=Count('products',filter=Q(products__id__in=ids),distinct=True)).filter(n__gt=0).order_by('-n','name')
+    prices=list(base.values_list('price',flat=True).distinct())
+    buckets=[]
+    for lo,hi in zip([None]+PRICE_STEPS,PRICE_STEPS+[None]):
+        n=sum(1 for x in prices if (lo is None or x>=lo) and (hi is None or x<hi))
+        if n:buckets.append({'value':f"{lo or ''}-{hi or ''}",'label':(f'Below ₹{hi:,}' if lo is None else f'₹{lo:,} – ₹{hi:,}' if hi else f'Above ₹{lo:,}'),'count':n})
     return Response({'occasions':[occasion_data(o,o.n) for o in occ],
                      'sizes':sizes,
                      'colours':[{'name':c['name'],'hex':c['hex'],'count':len(c['products'])} for c in sorted(colours.values(),key=lambda c:(c['order'],c['name']))],
                      'price':{'min':price['min'] or 0,'max':price['max'] or 0},
+                     'price_ranges':buckets,
+                     'collections':[{'name':c.name,'slug':c.slug,'count':c.n} for c in cols],
                      'count':len(ids)})
 @api_view(['GET'])
 def home(request):
@@ -111,7 +126,18 @@ def products(request,slug=None):
     q=Product.objects.filter(active=True).prefetch_related('images','variants','collections','occasions')
     if slug:return Response(ProductSerializer(get_object_or_404(q,slug=slug)).data)
     p=request.query_params
-    if p.get('collection'):q=q.filter(collections__slug=p['collection'])
+    cols=[v for v in p.getlist('collection') if v]
+    if cols:q=q.filter(collections__slug__in=cols)
+    ranges=Q()
+    for r in p.getlist('price'):
+        lo,_,hi=r.partition('-')
+        try:
+            rq=Q()
+            if lo:rq&=Q(price__gte=Decimal(lo))
+            if hi:rq&=Q(price__lt=Decimal(hi))
+        except ArithmeticError:raise ValidationError('Invalid price range.')
+        ranges|=rq
+    if ranges:q=q.filter(ranges)
     if p.get('q'):q=q.filter(Q(name__icontains=p['q'])|Q(description__icontains=p['q']))
     # Filters accept repeated values (e.g. ?size=S&size=M) and match any of them.
     sizes=[v for v in p.getlist('size') if v]

@@ -46,7 +46,8 @@ class SettingsAdmin(admin.ModelAdmin):
                ('Contact',{'fields':('phone','email','address')}),
                ('Checkout',{'fields':('shipping_fee','free_shipping_above','cod_enabled')}),
                ('Category page defaults ({name} = collection name)',{'fields':('category_tagline','category_seo_heading','category_seo_body')}),
-               ('Fitting banner (all category pages)',{'fields':('fitting_title','fitting_text','fitting_button','fitting_steps','fitting_image')}))
+               ('Fitting banner (all category pages)',{'fields':('fitting_title','fitting_text','fitting_button','fitting_steps','fitting_image')}),
+               ('All Products page (/products)',{'fields':('shop_eyebrow','shop_title','shop_text','shop_image','shop_heading','shop_subheading','shop_fitting_title','shop_fitting_text','shop_fitting_note','shop_fitting_image','shop_trust')}))
     def has_add_permission(self,request):return not SiteSettings.objects.exists()
     def has_delete_permission(self,*args):return False
 admin.site.register([AppointmentSlot,Coupon,Subscriber,Page])
