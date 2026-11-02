@@ -7,8 +7,17 @@ class VariantInline(admin.TabularInline):model=Variant;extra=1
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display=['name','price','active','featured'];list_filter=['active','featured','collections','occasions'];search_fields=['name','slug'];prepopulated_fields={'slug':('name',)};filter_horizontal=['collections','occasions'];inlines=[ImageInline,VariantInline]
+class PageQuestionInline(admin.TabularInline):
+    model=PageQuestion;extra=1;fields=['kind','question','answer','sort_order','active'];verbose_name_plural='FAQs & guide entries for this category (leave empty to use the defaults)'
 @admin.register(Collection)
-class CollectionAdmin(admin.ModelAdmin):prepopulated_fields={'slug':('name',)};list_display=['name','active']
+class CollectionAdmin(admin.ModelAdmin):
+    prepopulated_fields={'slug':('name',)};list_display=['name','active'];inlines=[PageQuestionInline]
+    fieldsets=((None,{'fields':('name','slug','description','image','active')}),
+               ('SEO',{'fields':('seo_title','seo_description')}),
+               ('Category page text (leave blank to use the defaults in Site settings; {name} = collection name)',{'fields':('hero_eyebrow','hero_tagline','seo_heading','seo_body')}))
+@admin.register(PageQuestion)
+class PageQuestionAdmin(admin.ModelAdmin):
+    list_display=['question','kind','collection','sort_order','active'];list_filter=['kind','collection','active'];list_editable=['sort_order','active'];search_fields=['question','answer']
 @admin.register(Customer)
 class CustomerAdmin(UserAdmin):
     fieldsets=UserAdmin.fieldsets+ (('WhatsApp',{'fields':('phone','marketing_opt_in')}),)
@@ -33,6 +42,11 @@ class AppointmentAdmin(admin.ModelAdmin):
     list_display=['name','slot','session_type','mode','status'];list_filter=['status','mode'];readonly_fields=['consent','created_at']
 @admin.register(SiteSettings)
 class SettingsAdmin(admin.ModelAdmin):
+    fieldsets=((None,{'fields':('name','announcement','hero_title','hero_description','hero_image')}),
+               ('Contact',{'fields':('phone','email','address')}),
+               ('Checkout',{'fields':('shipping_fee','free_shipping_above','cod_enabled')}),
+               ('Category page defaults ({name} = collection name)',{'fields':('category_tagline','category_seo_heading','category_seo_body')}),
+               ('Fitting banner (all category pages)',{'fields':('fitting_title','fitting_text','fitting_button','fitting_steps','fitting_image')}))
     def has_add_permission(self,request):return not SiteSettings.objects.exists()
     def has_delete_permission(self,*args):return False
 admin.site.register([AppointmentSlot,Coupon,Subscriber,Page])

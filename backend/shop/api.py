@@ -121,8 +121,25 @@ def products(request,slug=None):
     q=q.distinct().order_by(order,'id')
     count=q.count()
     return Response({'count':count,'page':page,'pages':max(1,(count+11)//12),'results':ProductSerializer(q[(page-1)*12:page*12],many=True).data})
+def category_content(c):
+    """Text for a category page: the collection's own text, else Site settings defaults. {name} -> collection name."""
+    s=SiteSettings.current()
+    fill=lambda t:(t or '').replace('{name}',c.name)
+    def entries(kind):
+        own=c.questions.filter(kind=kind,active=True)
+        rows=own if own.exists() else PageQuestion.objects.filter(collection__isnull=True,kind=kind,active=True)
+        return [{'question':fill(r.question),'answer':fill(r.answer)} for r in rows]
+    return {'eyebrow':fill(c.hero_eyebrow or 'The {name} Edit'),
+            'tagline':fill(c.hero_tagline or s.category_tagline),
+            'seo_heading':fill(c.seo_heading or s.category_seo_heading),
+            'seo_body':fill(c.seo_body or s.category_seo_body),
+            'faqs':entries('faq'),'guides':entries('guide'),
+            'fitting':{'title':s.fitting_title,'text':s.fitting_text,'button':s.fitting_button,
+                       'steps':[x.strip() for x in s.fitting_steps.split('|') if x.strip()],'image':media_url(s.fitting_image)}}
 @api_view(['GET'])
-def collection(request,slug):return Response(CollectionSerializer(get_object_or_404(Collection,slug=slug,active=True)).data)
+def collection(request,slug):
+    c=get_object_or_404(Collection,slug=slug,active=True)
+    return Response({**CollectionSerializer(c).data,'content':category_content(c)})
 @api_view(['GET'])
 def me(request):return Response({'user':user_data(request.user) if request.user.is_authenticated else None})
 @api_view(['POST'])
