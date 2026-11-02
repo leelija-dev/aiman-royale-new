@@ -24,7 +24,7 @@ The API version is explicitly pinned. Sandbox uses `https://sandbox.cashfree.com
 
 ### Staging checklist (sandbox test payment)
 
-Set these in the **server's** `.env` (never in Git):
+Set these in the **server's** `.env` (never in Git). Django reads `backend/.env` and the project-root `.env` automatically, both under Docker Compose and when started directly with `runserver`/gunicorn; real environment variables take priority. **Restart the backend after any change** (with Docker: `docker compose up -d --force-recreate backend worker beat` — a plain `restart` does not reload `.env`).
 
 ```dotenv
 CASHFREE_APP_ID=<your TEST app id>
