@@ -176,3 +176,22 @@ class MultiValueFilterTests(TestCase):
         self.assertEqual(menu[0]['label'],'Gown')
         self.assertEqual([c['title'] for c in menu[0]['columns']],['Style','Occasion'])
         self.assertIn({'label':'Mehendi','href':'/collections/gown-test?occasion=mehendi'},menu[0]['columns'][1]['links'])
+
+
+class CategoryContentTests(TestCase):
+    def test_defaults_then_collection_overrides(self):
+        from shop.models import Collection, PageQuestion, SiteSettings
+        c=Collection.objects.create(name='Gown',slug='gown-x')
+        d=self.client.get('/api/collections/gown-x/').json()['content']
+        self.assertEqual(d['eyebrow'],'The Gown Edit')
+        self.assertEqual(d['seo_heading'],'Buy Embroidered Gown for Women Online')
+        self.assertEqual(len(d['faqs']),3);self.assertIn('Gown',d['faqs'][0]['answer'])
+        self.assertEqual(d['fitting']['steps'],['Choose a date.','Meet our team.','Find your fit.'])
+        c.hero_tagline='Made for evenings';c.seo_heading='Designer {name}s';c.save()
+        PageQuestion.objects.create(collection=c,kind='faq',question='Is lining included?',answer='Yes.')
+        s=SiteSettings.current();s.fitting_button='Book Now';s.save()
+        d=self.client.get('/api/collections/gown-x/').json()['content']
+        self.assertEqual(d['tagline'],'Made for evenings');self.assertEqual(d['seo_heading'],'Designer Gowns')
+        self.assertEqual(d['faqs'],[{'question':'Is lining included?','answer':'Yes.'}])
+        self.assertEqual(len(d['guides']),3)
+        self.assertEqual(d['fitting']['button'],'Book Now')

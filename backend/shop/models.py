@@ -21,6 +21,15 @@ class SiteSettings(models.Model):
     shipping_fee=models.DecimalField(max_digits=9,decimal_places=2,default=0)
     free_shipping_above=models.DecimalField(max_digits=9,decimal_places=2,default=999)
     cod_enabled=models.BooleanField(default=False)
+    # Category page defaults ({name} = collection name)
+    category_tagline=models.CharField(max_length=160,default='Heritage in every detail. Elegance in every moment.')
+    category_seo_heading=models.CharField(max_length=160,default='Buy Embroidered {name} for Women Online')
+    category_seo_body=models.TextField(default='At Aiman Royale, we treat {name} for women as more than just a collection. They are a reflection of culture, grace, and confidence — designed for every celebration on your calendar.')
+    fitting_title=models.CharField('Fitting banner title',max_length=160,default='A style you love.\nA fit that feels like you.')
+    fitting_text=models.CharField('Fitting banner text',max_length=300,default='Discuss your measurements, your occasion and your favourite designs with our team.')
+    fitting_button=models.CharField('Fitting banner button',max_length=40,default='Book a Fitting')
+    fitting_steps=models.CharField('Fitting banner steps',max_length=200,default='Choose a date.|Meet our team.|Find your fit.',help_text='Separate steps with |')
+    fitting_image=models.ImageField('Fitting banner image',upload_to='editorial/',blank=True)
     @classmethod
     def current(cls): return cls.objects.get_or_create(pk=1)[0]
     def save(self,*args,**kwargs): self.pk=1;super().save(*args,**kwargs)
@@ -34,7 +43,24 @@ class Collection(models.Model):
     seo_title=models.CharField(max_length=150,blank=True)
     seo_description=models.CharField(max_length=300,blank=True)
     active=models.BooleanField(default=True)
+    # Category page text. Leave blank to use the defaults from Site settings. {name} is replaced with the collection name.
+    hero_eyebrow=models.CharField('Banner small heading',max_length=80,blank=True,help_text='Default: "The {name} Edit"')
+    hero_tagline=models.CharField('Banner tagline',max_length=160,blank=True)
+    seo_heading=models.CharField('SEO section heading',max_length=160,blank=True)
+    seo_body=models.TextField('SEO section text',blank=True)
     def __str__(self):return self.name
+
+class PageQuestion(models.Model):
+    """FAQ or guide entry on category pages. With no collection it is a default shown on every category without its own."""
+    KINDS=[('faq','FAQ ("A little guidance")'),('guide','SEO section accordion')]
+    collection=models.ForeignKey('Collection',on_delete=models.CASCADE,null=True,blank=True,related_name='questions',help_text='Leave empty to use on all categories that have none of their own.')
+    kind=models.CharField(max_length=10,choices=KINDS,default='faq')
+    question=models.CharField('Question / title',max_length=200)
+    answer=models.TextField()
+    sort_order=models.PositiveIntegerField(default=0)
+    active=models.BooleanField(default=True)
+    class Meta:ordering=['sort_order','id'];verbose_name='Category FAQ / guide';verbose_name_plural='Category FAQs & guides'
+    def __str__(self):return self.question
 
 class Occasion(models.Model):
     """Shown in category filters, 'Shop by Occasion' cards and the mega menu."""
