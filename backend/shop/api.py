@@ -127,6 +127,13 @@ def reviews(request,slug):
     return Response({'average':round(agg['avg'],1) if agg['avg'] else None,'count':agg['n'],
                      'reviews':[{'name':r.name,'rating':r.rating,'text':r.text,'date':r.created_at.date().isoformat()} for r in q[:50]]})
 @api_view(['GET'])
+def size_guide(request):
+    """Size Guide popup: chart rows (inches), how-to-measure steps, note and optional PDF."""
+    s=SiteSettings.current()
+    return Response({'rows':[{'size':r.size,'alt':r.alt_size,'bust':float(r.bust),'waist':float(r.waist),'hip':float(r.hip),'armhole':float(r.armhole),'uk':r.uk_size} for r in SizeChartRow.objects.all()],
+                     'steps':[{'title':m.title,'text':m.text,'image':media_url(m.image)} for m in MeasureStep.objects.all()],
+                     'note':s.size_guide_note,'pdf':media_url(s.size_chart_pdf)})
+@api_view(['GET'])
 def home(request):
     """Homepage sections in display order, managed in admin (Homepage sections)."""
     img=lambda o:media_url(o.image) or o.image_path

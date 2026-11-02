@@ -250,3 +250,14 @@ class AllProductsPageTests(TestCase):
         self.assertEqual(f['price_ranges'][0]['label'],'Below ₹5,000')
         site=self.client.get('/api/site/').json()['shop_page']
         self.assertEqual(site['heading'],'All Products');self.assertEqual(len(site['trust']),3)
+
+
+class SizeGuideTests(TestCase):
+    def test_size_guide_comes_from_admin_tables(self):
+        from shop.models import SizeChartRow
+        d=self.client.get('/api/size-guide/').json()
+        self.assertEqual([r['size'] for r in d['rows']],['XS','S','M','L','XL','XXL','3XL'])
+        self.assertEqual(d['rows'][0],{'size':'XS','alt':'34','bust':34.0,'waist':28.0,'hip':38.5,'armhole':15.5,'uk':'6'})
+        self.assertEqual(len(d['steps']),4);self.assertIn('variations',d['note'])
+        SizeChartRow.objects.filter(size='XS').update(bust='33.5')
+        self.assertEqual(self.client.get('/api/size-guide/').json()['rows'][0]['bust'],33.5)

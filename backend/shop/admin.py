@@ -44,6 +44,7 @@ class AppointmentAdmin(admin.ModelAdmin):
 class SettingsAdmin(admin.ModelAdmin):
     fieldsets=((None,{'fields':('name','announcement','hero_title','hero_description','hero_image')}),
                ('Contact',{'fields':('phone','email','address','delivery_message')}),
+               ('Size guide popup',{'fields':('size_guide_note','size_chart_pdf')}),
                ('Checkout',{'fields':('shipping_fee','free_shipping_above','cod_enabled')}),
                ('Category page defaults ({name} = collection name)',{'fields':('category_tagline','category_seo_heading','category_seo_body')}),
                ('Fitting banner (all category pages)',{'fields':('fitting_title','fitting_text','fitting_button','fitting_steps','fitting_image')}),
@@ -79,3 +80,9 @@ class ReviewAdmin(admin.ModelAdmin):
     actions=['approve']
     @admin.action(description='Approve selected reviews')
     def approve(self,request,q):q.update(approved=True)
+@admin.register(SizeChartRow)
+class SizeChartRowAdmin(admin.ModelAdmin):
+    list_display=['size','alt_size','bust','waist','hip','armhole','uk_size','sort_order'];list_editable=['alt_size','bust','waist','hip','armhole','uk_size','sort_order']
+@admin.register(MeasureStep)
+class MeasureStepAdmin(admin.ModelAdmin):
+    list_display=['title','sort_order'];list_editable=['sort_order']
