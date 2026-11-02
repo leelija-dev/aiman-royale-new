@@ -33,7 +33,7 @@ class AuthThrottle(SimpleRateThrottle):
 
 @ensure_csrf_cookie
 def csrf(request):return JsonResponse({'csrfToken':get_token(request)})
-def user_data(u):return {'id':u.pk,'name':u.first_name,'email':u.email,'phone':u.phone}
+def user_data(u):return {'id':u.pk,'name':u.get_full_name() or u.first_name,'first_name':u.first_name,'last_name':u.last_name,'email':u.email,'phone':u.phone,'marketing_opt_in':u.marketing_opt_in,'joined':u.date_joined.date().isoformat()}
 def get_cart(request):
     if request.user.is_authenticated:return Cart.objects.get_or_create(user=request.user)[0]
     if not request.session.session_key:request.session.create()
@@ -44,7 +44,7 @@ def merge_cart(request,old_key):
     if guest and guest.pk!=cart.pk:
         for i in guest.items.select_related('variant'):
             item,_=CartItem.objects.get_or_create(cart=cart,variant=i.variant,defaults={'quantity':0})
-            item.quantity=min(10,item.quantity+i.quantity,i.variant.stock)
+            item.quantity=min(item.quantity+i.quantity,i.variant.stock)
             item.measurements=i.measurements
             if item.quantity:item.save()
             else:item.delete()
@@ -52,7 +52,7 @@ def merge_cart(request,old_key):
 @api_view(['GET'])
 def site(request):
     s=SiteSettings.current()
-    return Response({'name':s.name,'announcement':s.announcement,'hero_title':s.hero_title,'hero_description':s.hero_description,'hero_image':s.hero_image.url if s.hero_image else '/images/hero.webp','phone':s.phone,'email':s.email,'address':s.address,'cod_enabled':s.cod_enabled,'payment_ready':bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY),'whatsapp_ready':bool(settings.WHATSAPP_TOKEN and settings.WHATSAPP_PHONE_ID and settings.WHATSAPP_OTP_TEMPLATE and settings.WHATSAPP_GRAPH_VERSION),'collections':CollectionSerializer(Collection.objects.filter(active=True),many=True).data,'menu':menu_data(),'delivery_message':s.delivery_message,'shop_page':shop_page(s),'occasions':[occasion_data(o) for o in Occasion.objects.filter(active=True)]})
+    return Response({'name':s.name,'announcement':s.announcement,'hero_title':s.hero_title,'hero_description':s.hero_description,'hero_image':s.hero_image.url if s.hero_image else '/images/hero.webp','phone':s.phone,'email':s.email,'address':s.address,'cod_enabled':s.cod_enabled,'payment_ready':bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY),'whatsapp_ready':bool(settings.WHATSAPP_TOKEN and settings.WHATSAPP_PHONE_ID and settings.WHATSAPP_OTP_TEMPLATE and settings.WHATSAPP_GRAPH_VERSION),'collections':CollectionSerializer(Collection.objects.filter(active=True),many=True).data,'menu':menu_data(),'delivery_message':s.delivery_message,'calendly':{'url':s.calendly_url,'primary':s.calendly_primary_color,'text':s.calendly_text_color,'background':s.calendly_background_color} if s.calendly_url else None,'social':{k:getattr(s,k+'_url') for k in ['instagram','facebook','youtube','pinterest'] if getattr(s,k+'_url')},'footer_tagline':s.footer_tagline,'shop_page':shop_page(s),'occasions':[occasion_data(o) for o in Occasion.objects.filter(active=True)]})
 PRICE_STEPS=[5000,8000,10000,15000,20000,30000]
 SIZE_ORDER=['XXS','XS','S','M','L','XL','XXL','2XL','3XL','4XL','5XL','FREE']
 def media_url(f):return f.url if f else ''
@@ -66,12 +66,30 @@ def shop_page(s):
             'heading':s.shop_heading,'subheading':s.shop_subheading,
             'fitting':{'title':s.shop_fitting_title,'text':s.shop_fitting_text,'note':s.shop_fitting_note,'image':media_url(s.shop_fitting_image)},
             'trust':[{'title':t.strip(),'text':x.strip()} for t,_,x in (l.partition('|') for l in s.shop_trust.splitlines()) if t.strip()]}
+def collection_cover(c):
+    """Collection image, or the first photo of one of its products."""
+    if c.image:return c.image.url
+    im=ProductImage.objects.filter(product__collections=c,product__active=True).order_by('product__created_at','position').first()
+    return im.image.url if im and im.image else ''
+def style_collections(url):
+    """Collections to list under 'Style' for a menu item: sub-collections first, then collections sharing products."""
+    with_products=Collection.objects.filter(active=True,products__active=True).annotate(n=Count('products',filter=Q(products__active=True),distinct=True))
+    path=url.split('?')[0].rstrip('/')
+    if path=='/products':return list(with_products.filter(parent__isnull=False).order_by('sort_order','-n','name')) or list(with_products.order_by('-n','name'))
+    if not path.startswith('/collections/'):return []
+    me=Collection.objects.filter(slug=path.rsplit('/',1)[-1]).first()
+    if not me:return []
+    children=list(with_products.filter(parent=me).order_by('sort_order','-n','name'))
+    shared=list(with_products.filter(products__collections=me).exclude(pk=me.pk).exclude(pk__in=[c.pk for c in children]).exclude(pk=me.parent_id or 0).distinct().order_by('-n','name'))
+    return children+shared
 def menu_data():
     """Main menu for the header, managed in admin (Menu items)."""
     occasions=list(Occasion.objects.filter(active=True))
     items=[]
     for m in MenuItem.objects.filter(active=True).prefetch_related('links'):
         groups={'Style':[],'Occasion':[],'Collection':[]}
+        if m.auto_styles:
+            groups['Style']=[{'label':c.name,'href':f'/collections/{c.slug}','count':c.n,'image':collection_cover(c)} for c in style_collections(m.url)[:12]]
         for l in m.links.all():groups[l.group].append({'label':l.label,'href':l.url})
         if m.show_occasions:
             sep='&' if '?' in m.url else '?'
@@ -144,6 +162,10 @@ def home(request):
                     'product_filter':sec.product_filter,'product_count':sec.product_count,
                     'cards':[{'label':c.label,'title':c.title,'text':c.text,'bullets':[b.strip() for b in c.bullets.splitlines() if b.strip()],
                               'caption':c.caption,'href':c.url,'button':c.button_label,'icon':c.icon,'image':img(c)} for c in sec.cards.all() if c.active]})
+        if sec.kind=='strip' and not out[-1]['cards']:
+            # No cards entered in admin: show the collections that have products, each linking to its own page.
+            cols=Collection.objects.filter(active=True,products__active=True).annotate(n=Count('products',distinct=True)).order_by('-n','name')[:8]
+            out[-1]['cards']=[{'label':'','title':c.name,'text':'','bullets':[],'caption':'Shop Now →','href':f'/collections/{c.slug}','button':'','icon':'','image':collection_cover(c)} for c in cols]
     return Response({'sections':out})
 @api_view(['GET'])
 def products(request,slug=None):
@@ -202,8 +224,47 @@ def category_content(c):
 def collection(request,slug):
     c=get_object_or_404(Collection,slug=slug,active=True)
     return Response({**CollectionSerializer(c).data,'content':category_content(c)})
+@api_view(['GET','PATCH'])
+def me(request):
+    if request.method=='PATCH':
+        if not request.user.is_authenticated:return Response({'error':'Please sign in.'},status=401)
+        u=request.user;d=request.data
+        if 'first_name' in d:
+            u.first_name=str(d.get('first_name','')).strip()[:150]
+            if not u.first_name:raise ValidationError('Please enter your name.')
+        if 'last_name' in d:u.last_name=str(d.get('last_name','')).strip()[:150]
+        if 'phone' in d:
+            phone=re.sub(r'[\s-]','',str(d.get('phone') or ''))
+            if phone and not re.fullmatch(r'\+?[1-9]\d{9,14}',phone):raise ValidationError('Enter a valid mobile number, e.g. +919876543210.')
+            if phone and Customer.objects.filter(phone=phone).exclude(pk=u.pk).exists():raise ValidationError('This mobile number is already linked to another account.')
+            u.phone=phone or None
+        if 'marketing_opt_in' in d:u.marketing_opt_in=bool(d.get('marketing_opt_in'))
+        u.save()
+    return Response({'user':user_data(request.user) if request.user.is_authenticated else None})
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@throttle_classes([AuthThrottle])
+def change_password(request):
+    u=request.user
+    if u.has_usable_password() and not u.check_password(str(request.data.get('current',''))):raise ValidationError('Your current password is incorrect.')
+    new=str(request.data.get('new',''))
+    try:validate_password(new,user=u)
+    except DjangoValidationError as e:raise ValidationError(' '.join(e.messages))
+    u.set_password(new);u.save()
+    from django.contrib.auth import update_session_auth_hash
+    update_session_auth_hash(request,u)
+    return Response({'message':'Your password has been updated.'})
 @api_view(['GET'])
-def me(request):return Response({'user':user_data(request.user) if request.user.is_authenticated else None})
+def coupons(request):
+    """Coupons for the Saving Zone, with what each would save on the current bag."""
+    items=list(get_cart(request).items.select_related('variant__product'))
+    subtotal=sum((i.variant.product.price*i.quantity for i in items),Decimal('0'))
+    now=timezone.now();out=[]
+    for c in Coupon.objects.filter(active=True,public=True).filter(Q(expires_at__isnull=True)|Q(expires_at__gt=now)).order_by('-percent','minimum'):
+        ok=bool(items) and subtotal>=c.minimum
+        out.append({'code':c.code,'percent':c.percent,'minimum':c.minimum,'description':c.description,'expires_at':c.expires_at,
+                    'eligible':ok,'saving':money(subtotal*Decimal(c.percent)/100) if ok else Decimal('0'),'short_by':max(Decimal('0'),c.minimum-subtotal)})
+    return Response(out)
 @api_view(['POST'])
 @throttle_classes([AuthThrottle])
 def register(request):
@@ -281,7 +342,7 @@ def cart(request):
                 if measurements.get('unit') not in ['cm','in']:raise ValueError()
             except (ValueError,TypeError,KeyError):raise ValidationError('Enter all measurements and a valid unit.')
         existing=c.items.filter(variant=v).first();total=qty+(existing.quantity if existing else 0)
-        if qty<1 or total>min(v.stock,10):raise ValidationError('Quantity exceeds available stock or the order limit.')
+        if qty<1 or total>v.stock:raise ValidationError(f'Only {v.stock} left in this size.' if v.stock else 'This size is out of stock.')
         CartItem.objects.update_or_create(cart=c,variant=v,defaults={'quantity':total,'measurements':measurements})
     elif request.method in ['PATCH','DELETE']:
         i=get_object_or_404(c.items,pk=request.data.get('id'))
@@ -289,7 +350,7 @@ def cart(request):
         else:
             try:q=int(request.data.get('quantity',1))
             except (ValueError,TypeError):raise ValidationError('Invalid quantity.')
-            if not 1<=q<=min(10,i.variant.stock):raise ValidationError('Quantity unavailable.')
+            if not 1<=q<=i.variant.stock:raise ValidationError(f'Only {i.variant.stock} left in this size.')
             i.quantity=q;i.save()
     items=list(c.items.select_related('variant__product').prefetch_related('variant__product__images'))
     return Response({'items':[{'id':i.pk,'variant':VariantSerializer(i.variant).data,'product':ProductSerializer(i.variant.product).data,'quantity':i.quantity,'measurements':i.measurements} for i in items],'subtotal':str(sum((i.variant.product.price*i.quantity for i in items),Decimal(0)))})

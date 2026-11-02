@@ -32,6 +32,15 @@ class SiteSettings(models.Model):
     fitting_image=models.ImageField('Fitting banner image',upload_to='editorial/',blank=True)
     size_guide_note=models.CharField('Size guide note',max_length=300,default='This is a standard size guide for basic body measurements. There may be slight variations depending on the garment type and fit.')
     size_chart_pdf=models.FileField('Size chart PDF',upload_to='size-guide/',blank=True,help_text='Optional. Without a file, the Download button creates a printable PDF of the chart.')
+    calendly_url=models.URLField('Calendly link',blank=True,default='https://calendly.com/susmitaghosh-leelija/30min',help_text='Appointment page uses Calendly when set.')
+    calendly_primary_color=models.CharField(max_length=6,default='A10000',help_text='Hex without #')
+    calendly_text_color=models.CharField(max_length=6,default='EC4899')
+    calendly_background_color=models.CharField(max_length=6,default='FCE7F3')
+    instagram_url=models.URLField(blank=True)
+    facebook_url=models.URLField(blank=True)
+    youtube_url=models.URLField(blank=True)
+    pinterest_url=models.URLField(blank=True)
+    footer_tagline=models.CharField(max_length=80,default='Grace in Every Celebration')
     delivery_message=models.CharField('Delivery check message',max_length=200,default='We deliver across India. Shipping charges and timelines are confirmed at checkout.',help_text='Shown after a customer checks a PIN code on a product page.')
     # All Products page (/products)
     shop_eyebrow=models.CharField('Banner small heading',max_length=80,default='The Aiman Royale Collection')
@@ -58,6 +67,8 @@ class Collection(models.Model):
     seo_title=models.CharField(max_length=150,blank=True)
     seo_description=models.CharField(max_length=300,blank=True)
     active=models.BooleanField(default=True)
+    parent=models.ForeignKey('self',on_delete=models.SET_NULL,null=True,blank=True,related_name='children',help_text='e.g. Anarkali Suits belongs to Salwar Kameez. Sub-collections appear under their parent in the menu.')
+    sort_order=models.PositiveIntegerField(default=0)
     # Category page text. Leave blank to use the defaults from Site settings. {name} is replaced with the collection name.
     hero_eyebrow=models.CharField('Banner small heading',max_length=80,blank=True,help_text='Default: "The {name} Edit"')
     hero_tagline=models.CharField('Banner tagline',max_length=160,blank=True)
@@ -102,6 +113,7 @@ class MenuItem(models.Model):
     sort_order=models.PositiveIntegerField(default=0)
     active=models.BooleanField(default=True)
     show_occasions=models.BooleanField(default=True,help_text='Add an "Occasion" tab listing every active occasion automatically.')
+    auto_styles=models.BooleanField(default=True,help_text='Fill the "Style" tab automatically with the collections that have products here (sub-collections first).')
     feature_title=models.CharField(max_length=60,blank=True)
     feature_image=models.ImageField(upload_to='menu/',blank=True)
     feature_url=models.CharField(max_length=200,blank=True)
@@ -173,6 +185,8 @@ class Coupon(models.Model):
     minimum=models.DecimalField(max_digits=10,decimal_places=2,default=0)
     active=models.BooleanField(default=True)
     expires_at=models.DateTimeField(null=True,blank=True)
+    description=models.CharField(max_length=140,blank=True,help_text='Shown to shoppers, e.g. "Festive offer on all suits"')
+    public=models.BooleanField('Show in Saving Zone',default=True,help_text='List this coupon on the bag and checkout pages.')
     def __str__(self):return self.code
 
 class Order(models.Model):

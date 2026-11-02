@@ -6,6 +6,7 @@ import {useRouter} from 'next/navigation';
 import {ArrowRight, Minus, Plus, Lock, ChevronDown, ShoppingBag, Check} from 'lucide-react';
 import {api, bagChanged, err} from '@/lib/client';
 import {Bag, Product, User, money, photo} from '@/lib/types';
+import {SavingZone} from '@/components/saving-zone';
 
 type Quote = {subtotal: string; discount: string; shipping: string; total: string};
 export const COUPON_KEY = 'ar-coupon', NOTE_KEY = 'ar-note';
@@ -20,13 +21,13 @@ export function Steps({at}: {at: 1 | 2 | 3}) {
 export function BagPage({suggestions, swatches}: {suggestions: Product[]; swatches: Record<string, string>}) {
   const router = useRouter();
   const [bag, setBag] = useState<Bag | null>(null), [user, setUser] = useState<User | null>(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [info, setInfo] = useState('');
-  const [promoOpen, setPromoOpen] = useState(false), [code, setCode] = useState(''), [quote, setQuote] = useState<Quote | null>(null), [promoMsg, setPromoMsg] = useState<{ok: boolean; text: string} | null>(null);
+  const [code, setCode] = useState(''), [quote, setQuote] = useState<Quote | null>(null), [promoMsg, setPromoMsg] = useState<{ok: boolean; text: string} | null>(null);
   const [noteOn, setNoteOn] = useState(false), [note, setNote] = useState('');
 
   useEffect(() => {
     Promise.all([api<Bag>('cart/'), api<{user: User | null}>('auth/me/').catch(() => ({user: null}))]).then(([b, u]) => { setBag(b); setUser(u.user); }).catch(e => setError(err(e)));
     const c = read(COUPON_KEY), n = read(NOTE_KEY);
-    if (c) { setCode(c); setPromoOpen(true); }
+    if (c) setCode(c);
     if (n) { setNote(n); setNoteOn(true); }
   }, []);
   // Re-check a saved promo code whenever the bag changes.
@@ -43,7 +44,7 @@ export function BagPage({suggestions, swatches}: {suggestions: Product[]; swatch
   }
   async function applyPromo(c = code, quiet = false) {
     const value = c.trim().toUpperCase(); if (!value) return;
-    try { const q = await api<Quote>('quote/', 'POST', {coupon: value}); setQuote(q); write(COUPON_KEY, value); setCode(value); setPromoMsg({ok: true, text: `Code ${value} applied.`}); }
+    try { const q = await api<Quote>('quote/', 'POST', {coupon: value}); setQuote(q); write(COUPON_KEY, value); setCode(value); setPromoMsg({ok: true, text: `You save ${money(q.discount)}`}); }
     catch (e) { setQuote(null); write(COUPON_KEY, ''); if (!quiet) setPromoMsg({ok: false, text: err(e)}); else setPromoMsg(null); }
   }
 
@@ -68,7 +69,7 @@ export function BagPage({suggestions, swatches}: {suggestions: Product[]; swatch
               <h2><Link href={`/products/${i.product.slug}`}>{i.product.name}</Link></h2>
               <dl><div><dt>Size</dt><dd>{i.variant.size}</dd></div><div><dt>Colour</dt><dd>{i.variant.colour}{swatch && <span className="bag-swatch" style={{background: swatch}}/>}</dd></div><div><dt>Type</dt><dd>{custom ? 'Custom measurements' : 'Stitched'}</dd></div></dl>
               <p className="bag-price"><strong>{money(Number(i.product.price) * i.quantity)}</strong>{Number(i.product.mrp) > Number(i.product.price) && <del>{money(Number(i.product.mrp) * i.quantity)}</del>}</p>
-              <div className="pd-qty"><button type="button" aria-label="Decrease quantity" disabled={busy || i.quantity <= 1} onClick={() => change(i.id, i.quantity - 1)}><Minus size={16}/></button><span>{i.quantity}</span><button type="button" aria-label="Increase quantity" disabled={busy || i.quantity >= Math.min(10, i.variant.stock)} onClick={() => change(i.id, i.quantity + 1)}><Plus size={16}/></button></div>
+              <div className="pd-qty"><button type="button" aria-label="Decrease quantity" disabled={busy || i.quantity <= 1} onClick={() => change(i.id, i.quantity - 1)}><Minus size={16}/></button><span>{i.quantity}</span><button type="button" aria-label="Increase quantity" disabled={busy || i.quantity >= i.variant.stock} onClick={() => change(i.id, i.quantity + 1)}><Plus size={16}/></button></div>
               <p className="bag-links"><Link href={`/products/${i.product.slug}`}>Edit size</Link><span>|</span><button type="button" onClick={() => moveToWishlist(i.id, i.product.id)}>Move to Wishlist</button><span>|</span><button type="button" disabled={busy} onClick={() => change(i.id)}>Remove</button></p>
             </div>
           </article>; })}
@@ -88,9 +89,8 @@ export function BagPage({suggestions, swatches}: {suggestions: Product[]; swatch
         <hr/>
         <div className="sum-total"><span>Estimated total</span><strong>{money(subtotal - promo)}</strong></div>
         <p className="sum-small">Final total shown before payment</p>
-        <div className="sum-promo"><button type="button" aria-expanded={promoOpen} onClick={() => setPromoOpen(!promoOpen)}>Have a promo code?<ChevronDown size={18} className={promoOpen ? 'flip' : ''}/></button>
-          {promoOpen && <form onSubmit={e => { e.preventDefault(); applyPromo(); }}><input value={code} onChange={e => setCode(e.target.value)} placeholder="Enter promo code" aria-label="Promo code"/><button className="pd-btn-sm">Apply</button></form>}
-          {promoMsg && <p className={promoMsg.ok ? 'pd-ok' : 'pd-err'}>{promoMsg.text}</p>}</div>
+        <SavingZone applied={quote && promo >= 0 && read(COUPON_KEY) ? code : ''} refreshKey={bag}
+          onApply={c => applyPromo(c)} onRemove={() => { write(COUPON_KEY, ''); setQuote(null); setCode(''); setPromoMsg(null); }} message={promoMsg}/>
         <button type="button" className="pd-btn pd-btn-bag sum-cta" onClick={() => router.push(user ? '/checkout' : `/login?next=${encodeURIComponent('/checkout')}`)}>Continue to Checkout <ArrowRight size={18}/></button>
         <p className="sum-foot">{!user && <><Link href={`/login?next=${encodeURIComponent('/checkout')}`}>Sign in to continue securely</Link><span>|</span></>}<span className="sum-secure"><Lock size={15}/> Secure checkout</span></p>
       </aside>

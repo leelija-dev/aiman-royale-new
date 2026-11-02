@@ -48,3 +48,17 @@ export function useWishlist(productId: number): [boolean, () => Promise<'added' 
   };
   return [saved, toggle];
 }
+
+/** Number of saved styles, kept in sync with every heart on the page (0 when signed out). */
+export function useWishlistCount() {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const sync = () => setN(ids?.size || 0);
+    const refresh = () => { load(true); };
+    sync(); load(!signedIn);
+    window.addEventListener(EVENT, sync);
+    window.addEventListener('bag-changed', refresh); // fired on sign in / sign out
+    return () => { window.removeEventListener(EVENT, sync); window.removeEventListener('bag-changed', refresh); };
+  }, []);
+  return n;
+}

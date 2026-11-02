@@ -2,7 +2,7 @@
 // Style links point to collection pages; occasion links use the existing ?occasion= filter
 // (supported values: Haldi, Wedding, Party, Festive).
 
-export type MenuLink = {label: string; href: string};
+export type MenuLink = {label: string; href: string; count?: number; image?: string};
 export type MenuColumn = {title: string; links: MenuLink[]};
 export type MenuItem = {label: string; href: string; columns: MenuColumn[]; feature?: {image: string; title: string; href: string}};
 
