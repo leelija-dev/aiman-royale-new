@@ -30,6 +30,8 @@ class SiteSettings(models.Model):
     fitting_button=models.CharField('Fitting banner button',max_length=40,default='Book a Fitting')
     fitting_steps=models.CharField('Fitting banner steps',max_length=200,default='Choose a date.|Meet our team.|Find your fit.',help_text='Separate steps with |')
     fitting_image=models.ImageField('Fitting banner image',upload_to='editorial/',blank=True)
+    size_guide_note=models.CharField('Size guide note',max_length=300,default='This is a standard size guide for basic body measurements. There may be slight variations depending on the garment type and fit.')
+    size_chart_pdf=models.FileField('Size chart PDF',upload_to='size-guide/',blank=True,help_text='Optional. Without a file, the Download button creates a printable PDF of the chart.')
     delivery_message=models.CharField('Delivery check message',max_length=200,default='We deliver across India. Shipping charges and timelines are confirmed at checkout.',help_text='Shown after a customer checks a PIN code on a product page.')
     # All Products page (/products)
     shop_eyebrow=models.CharField('Banner small heading',max_length=80,default='The Aiman Royale Collection')
@@ -302,3 +304,26 @@ class HomeCard(models.Model):
     active=models.BooleanField(default=True)
     class Meta:ordering=['sort_order','id']
     def __str__(self):return self.title or self.label or f'Card {self.pk}'
+
+
+class SizeChartRow(models.Model):
+    """One row of the Size Guide popup. Enter body measurements in INCHES; the cm view is calculated."""
+    size=models.CharField(max_length=20,help_text='e.g. XS')
+    alt_size=models.CharField('Alternate size',max_length=20,blank=True,help_text='e.g. 34')
+    bust=models.DecimalField(max_digits=5,decimal_places=2)
+    waist=models.DecimalField(max_digits=5,decimal_places=2)
+    hip=models.DecimalField(max_digits=5,decimal_places=2)
+    armhole=models.DecimalField(max_digits=5,decimal_places=2)
+    uk_size=models.CharField('UK size',max_length=10,blank=True)
+    sort_order=models.PositiveIntegerField(default=0)
+    class Meta:ordering=['sort_order','id'];verbose_name='Size chart row'
+    def __str__(self):return f'{self.size} ({self.alt_size})' if self.alt_size else self.size
+
+class MeasureStep(models.Model):
+    """'How to Measure Yourself' step in the Size Guide popup."""
+    title=models.CharField(max_length=80)
+    text=models.TextField(blank=True)
+    image=models.ImageField(upload_to='size-guide/',blank=True,help_text='Leave empty to show a simple diagram.')
+    sort_order=models.PositiveIntegerField(default=0)
+    class Meta:ordering=['sort_order','id'];verbose_name='How-to-measure step'
+    def __str__(self):return self.title
