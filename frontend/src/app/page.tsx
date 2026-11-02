@@ -1,37 +1,82 @@
+import {Fragment} from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import {ArrowRight, PackageCheck, Headphones, Gem, ShieldCheck, Truck, Award} from 'lucide-react';
+import {ArrowRight, PackageCheck, Headphones, Gem, ShieldCheck, Truck, Award, Heart, Star, Sparkles, CalendarDays, Ruler} from 'lucide-react';
 import {get} from '@/lib/server';
-import {ProductPage, Site} from '@/lib/types';
+import {ProductPage} from '@/lib/types';
 import {ProductGrid} from '@/components/catalogue';
+
 export const metadata = {alternates: {canonical: '/'}};
-const edits = [
- {name:'Salwar Kameez',image:'pink',query:'Salwar'},
- {name:'Gown',image:'purple',query:'Gown'},
- {name:'Anarkali Suits',image:'maroon',query:'Anarkali'},
- {name:'Palazzo Suits',image:'green',query:'Palazzo'},
-];
-function EditCard({name,image,href,caption='Explore →'}:{name:string;image:string;href:string;caption?:string}) {return <Link className="home-edit-card" href={href}><Image src={`/images/${image}.webp`} alt={name} fill sizes="(max-width:700px) 46vw,24vw" quality={85}/><div><h3>{name}</h3><span>{caption}</span></div></Link>}
-function Heading({title,subtitle}:{title:string;subtitle?:string}){return <div className="home-heading"><h2>{title}</h2>{subtitle&&<p>{subtitle}</p>}</div>}
-export default async function Home(){
- const [site,data]=await Promise.all([get<Site>('site/'),get<ProductPage>('products/?featured=1')]);
- const collectionLink=(query:string)=>{const c=site.collections.find(c=>c.name.toLowerCase().includes(query.toLowerCase()));return c?`/collections/${c.slug}`:`/products?q=${encodeURIComponent(query)}`;};
- return <div className="royale-home">
- <section className="luxury-hero"><Image src={site.hero_image==='/images/hero.webp'?'/images/home-hero.webp':site.hero_image} alt="Burgundy and ivory celebration wear in a sunlit palace" fill priority sizes="100vw" quality={85}/><div><h1>Shop Luxury<br/>Crafted For You</h1><Link className="button" href="/products">SHOP NOW <ArrowRight size={16}/></Link></div></section>
- <div className="home-wrap">
- <section className="home-four home-featured" aria-label="Featured collections">{edits.map((c,i)=><EditCard key={c.name} {...c} name={i===1?'Bridesmaid Lehenga':c.name} href={collectionLink(i===1?'Lehenga':c.query)} caption="Most Loved"/>)}</section>
- <section><Heading title="Be the Showstopper on Every Occasion" subtitle="Navigate our elite collections for gowns, salwar kameez, and suits."/><div className="home-four mini-collections">{edits.map(c=><Link key={c.name} href={collectionLink(c.query)}><Image src={`/images/${c.image}.webp`} alt={c.name} width={180} height={210}/><div><h3>{c.name}</h3><small>COLLECTION</small><span>Discover timeless fashion</span></div></Link>)}</div><div className="center"><Link className="underlink" href="/products">View All Categories →</Link></div></section>
- <section><Heading title="Elegance at Every Wear" subtitle="Experience class and sophistication for life's most memorable moments"/><div className="home-four">{edits.map(c=><EditCard key={c.name} {...c} href={collectionLink(c.query)}/>)}</div></section>
- <section className="home-products"><div className="home-row-title"><h2>Trending Best Selling Products</h2><Link href="/products" className="underlink">All Products →</Link></div><ProductGrid products={data.results.slice(0,4)}/></section>
- </div>
- <section className="home-confidence"><div><h2>Shop With Complete Confidence</h2><p>From designer craftsmanship to affordable luxury, every purchase is backed by our commitment to you.</p></div><span><PackageCheck/>Returns & exchanges<small>See our returns policy</small></span><span><Headphones/>Dedicated customer support</span><span><Gem/>Affordable luxury at your fingertips</span></section>
- <div className="home-wrap"><section><Heading title="The Wedding Edit" subtitle="Curated collections for your special day"/><div className="wedding-mosaic"><EditCard name="Straight Suit" image="rani" href="/products?occasion=Wedding" caption="Discover Timeless Elegance · Shop Now →"/><EditCard name="Royal Craftsmanship" image="wine" href="/products?occasion=Wedding" caption="Shop Now →"/><EditCard name="Elegance In Motion" image="pink" href="/products?occasion=Wedding" caption="Shop Now →"/><EditCard name="Signature Style" image="maroon" href="/products?occasion=Wedding" caption="Shop Now →"/><EditCard name="Ethnic Glamour" image="purple" href="/products?occasion=Wedding" caption="Shop Now →"/><EditCard name="Luxury Collection" image="green" href="/products?occasion=Wedding" caption="Shop Now →"/></div></section></div>
- <section className="home-sale"><Image src="/images/embroidery.webp" alt="Intricate embroidery" fill sizes="100vw"/><div><p>THE CELEBRATION COLLECTION</p><h2>A Beautiful Season of Style</h2><p>Discover your next unforgettable look.</p><Link className="button outline" href="/products">Shop Now →</Link></div></section>
- <div className="home-wrap"><section className="style-strip" aria-label="Style inspiration">{['Elegant Expressions','Elegant Moments','Premium Styles','Classic Charm','Grace & Glamour','Style Forever','Iconic Fashion','Grace Unfolded'].map((name,i)=><Link key={name} href="/products"><Image src={`/images/${['maroon','pink','green','purple','wine','rani','navy','gharara'][i]}.webp`} alt={name} width={180} height={200}/><h3>{name}</h3><span>Shop Now →</span></Link>)}</section>
- <div className="home-benefits">{[[Award,'Premium Quality','Crafted from carefully selected fabrics.'],[ShieldCheck,'Buyer Protection','Secure payments and clear policies.'],[Truck,'Thoughtful Delivery','Delivery details at checkout.'],[Headphones,'Personal Support','Our team is here to help.']].map(([Icon,title,copy])=>{const I=Icon as typeof Award;return <div key={String(title)}><I/><span><strong>{String(title)}</strong><small>{String(copy)}</small></span></div>})}</div>
- <section className="home-products"><div className="home-row-title"><div><h2>Our Signature Standouts</h2><p>From designer ready to every design we create</p></div><Link href="/products" className="underlink">View All →</Link></div><ProductGrid products={data.results.slice(4,8).length?data.results.slice(4,8):data.results.slice(0,4)}/></section>
- <section className="home-consult"><div className="consult-photo"><Image src="/images/fitting.webp" alt="Personal fitting and styling consultation" fill sizes="(max-width:700px) 100vw,45vw"/></div><div><h2>Book Us for Your Occasion</h2><p>Get the perfect fit through our personal styling appointments.</p><div className="consult-options"><article><small>PERSONAL STYLING</small><h3>Get connected with fashion experts</h3><p>Explore silhouettes, discuss your occasion and find the look that feels like you.</p><ul><li>One-to-one styling session</li><li>Discover our designer collection</li><li>Help choosing your perfect fit</li></ul><Link href="/appointment" className="button">Schedule an Appointment →</Link></article><article><small>BRIDAL CONSULTATION</small><h3>Know your style and fit</h3><p>A personal consultation for your celebration, with attention to every detail.</p><ul><li>Discuss your wedding wardrobe</li><li>Get help with measurements</li><li>Choose a meeting date and time</li></ul><Link href="/appointment" className="button">Book Bridal Consultation →</Link></article></div></div></section>
- <section><Heading title="DESIGNER’S PERSPECTIVE"/><div className="designer-notes">{[['Elegance in Every Detail','Thoughtfully chosen silhouettes and intricate finishes bring your celebration wardrobe to life.'],['Modern Salwar Kameez','Discover versatile occasion wear, with fitting guidance to help you feel comfortable and confident.'],['The Palazzo Revolution','Explore flowing shapes and expressive details for wedding celebrations, festive gatherings and more.']].map(([title,copy])=><article key={title}><h3>{title}</h3><p>{copy}</p><strong>Aiman Royale</strong><small>Design & Styling</small></article>)}</div></section>
- <section className="home-story"><h2>Aiman Royale — The definition of resilience and the vigour of not giving up</h2><p>Ethnic designer wear for women in India. Discover designer lehengas, palazzo sets, salwar suits, Indo-westerns and co-ords, with personal fitting and styling for your special moments. <Link className="underlink" href="/appointment">Meet your stylist →</Link></p></section>
- </div></div>;
+
+// Content is managed in Django admin → Homepage sections. Sections render in their admin order.
+type Card = {label: string; title: string; text: string; bullets: string[]; caption: string; href: string; button: string; icon: string; image: string};
+type Section = {id: number; kind: string; eyebrow: string; title: string; subtitle: string; text: string; button: {label: string; href: string} | null;
+  image: string; product_filter: string; product_count: number; cards: Card[]};
+
+const ICONS = {award: Award, shield: ShieldCheck, truck: Truck, headphones: Headphones, package: PackageCheck, gem: Gem, heart: Heart, star: Star,
+  sparkles: Sparkles, calendar: CalendarDays, ruler: Ruler} as const;
+const Icon = ({name}: {name: string}) => { const I = ICONS[name as keyof typeof ICONS]; return I ? <I/> : null; };
+const IMG = '/images/collection.webp';
+const lines = (t: string) => t.split('\n').flatMap((l, i) => i ? [<br key={i}/>, l] : [l]);
+
+function EditCard({c}: {c: Card}) {
+  return <Link className="home-edit-card" href={c.href || '/products'}><Image src={c.image || IMG} alt={c.title} fill sizes="(max-width:700px) 46vw,24vw" quality={85}/><div><h3>{c.title}</h3>{c.caption && <span>{c.caption}</span>}</div></Link>;
+}
+function Heading({s}: {s: Section}) {
+  return s.title || s.subtitle ? <div className="home-heading">{s.title && <h2>{s.title}</h2>}{s.subtitle && <p>{s.subtitle}</p>}</div> : null;
+}
+const Wrap = ({children}: {children: React.ReactNode}) => <div className="home-wrap">{children}</div>;
+
+function render(s: Section, products: Record<number, ProductPage>) {
+  const c = s.cards;
+  switch (s.kind) {
+    case 'hero':
+      return <section className="luxury-hero"><Image src={s.image || '/images/home-hero.webp'} alt={s.title.replace(/\n/g, ' ') || 'Aiman Royale'} fill priority sizes="100vw" quality={85}/>
+        <div>{s.eyebrow && <p className="eyebrow">{s.eyebrow}</p>}<h1>{lines(s.title)}</h1>{s.subtitle && <p>{s.subtitle}</p>}{s.button && <Link className="button" href={s.button.href}>{s.button.label} <ArrowRight size={16}/></Link>}</div></section>;
+    case 'featured':
+      return <Wrap><section className="home-four home-featured" aria-label={s.title || 'Featured collections'}>{c.map(x => <EditCard key={x.title + x.href} c={x}/>)}</section></Wrap>;
+    case 'collections':
+      return <Wrap><section><Heading s={s}/><div className="home-four mini-collections">{c.map(x =>
+        <Link key={x.title + x.href} href={x.href || '/products'}><Image src={x.image || IMG} alt={x.title} width={180} height={210}/><div><h3>{x.title}</h3>{x.label && <small>{x.label}</small>}{x.caption && <span>{x.caption}</span>}</div></Link>)}</div>
+        {s.button && <div className="center"><Link className="underlink" href={s.button.href}>{s.button.label}</Link></div>}</section></Wrap>;
+    case 'cards':
+      return <Wrap><section><Heading s={s}/><div className="home-four">{c.map(x => <EditCard key={x.title + x.href} c={x}/>)}</div></section></Wrap>;
+    case 'products': {
+      const list = products[s.id]?.results.slice(0, s.product_count) || [];
+      return list.length ? <Wrap><section className="home-products"><div className="home-row-title"><div>{s.title && <h2>{s.title}</h2>}{s.subtitle && <p>{s.subtitle}</p>}</div>
+        {s.button && <Link href={s.button.href} className="underlink">{s.button.label}</Link>}</div><ProductGrid products={list}/></section></Wrap> : null;
+    }
+    case 'confidence':
+      return <section className="home-confidence"><div>{s.title && <h2>{s.title}</h2>}{s.text && <p>{s.text}</p>}</div>{c.map(x => <span key={x.title}><Icon name={x.icon}/>{x.title}{x.text && <small>{x.text}</small>}</span>)}</section>;
+    case 'mosaic':
+      return <Wrap><section><Heading s={s}/><div className="wedding-mosaic">{c.map(x => <EditCard key={x.title + x.image} c={x}/>)}</div></section></Wrap>;
+    case 'banner':
+      return <section className="home-sale">{s.image && <Image src={s.image} alt="" fill sizes="100vw"/>}<div>{s.eyebrow && <p>{s.eyebrow}</p>}{s.title && <h2>{s.title}</h2>}{s.text && <p>{s.text}</p>}
+        {s.button && <Link className="button outline" href={s.button.href}>{s.button.label}</Link>}</div></section>;
+    case 'strip':
+      return <Wrap><section className="style-strip" aria-label={s.title || 'Style inspiration'}>{c.map(x =>
+        <Link key={x.title + x.image} href={x.href || '/products'}><Image src={x.image || IMG} alt={x.title} width={180} height={200}/><h3>{x.title}</h3>{x.caption && <span>{x.caption}</span>}</Link>)}</section></Wrap>;
+    case 'benefits':
+      return <Wrap><div className="home-benefits">{c.map(x => <div key={x.title}><Icon name={x.icon}/><span><strong>{x.title}</strong>{x.text && <small>{x.text}</small>}</span></div>)}</div></Wrap>;
+    case 'consult':
+      return <Wrap><section className="home-consult"><div className="consult-photo"><Image src={s.image || '/images/fitting.webp'} alt={s.title || 'Personal styling appointment'} fill sizes="(max-width:700px) 100vw,45vw"/></div>
+        <div>{s.title && <h2>{s.title}</h2>}{s.subtitle && <p>{s.subtitle}</p>}<div className="consult-options">{c.map(x =>
+          <article key={x.title + x.label}>{x.label && <small>{x.label}</small>}{x.title && <h3>{x.title}</h3>}{x.text && <p>{x.text}</p>}
+            {x.bullets.length > 0 && <ul>{x.bullets.map(b => <li key={b}>{b}</li>)}</ul>}{x.button && <Link href={x.href || '/appointment'} className="button">{x.button}</Link>}</article>)}</div></div></section></Wrap>;
+    case 'notes':
+      return <Wrap><section><Heading s={s}/><div className="designer-notes">{c.map(x => <article key={x.title}><h3>{x.title}</h3>{x.text && <p>{x.text}</p>}{x.label && <strong>{x.label}</strong>}{x.caption && <small>{x.caption}</small>}</article>)}</div></section></Wrap>;
+    case 'story':
+      return <Wrap><section className="home-story">{s.title && <h2>{s.title}</h2>}<p>{s.text} {s.button && <Link className="underlink" href={s.button.href}>{s.button.label}</Link>}</p></section></Wrap>;
+    default:
+      return null;
+  }
+}
+
+export default async function Home() {
+  const {sections} = await get<{sections: Section[]}>('home/');
+  const rows = sections.filter(s => s.kind === 'products');
+  const pages = await Promise.all(rows.map(s => get<ProductPage>(`products/?${s.product_filter}`).catch(() => null)));
+  const products: Record<number, ProductPage> = {};
+  rows.forEach((s, i) => { if (pages[i]) products[s.id] = pages[i]!; });
+  return <div className="royale-home">{sections.map(s => <Fragment key={s.id}>{render(s, products)}</Fragment>)}</div>;
 }

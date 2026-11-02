@@ -230,3 +230,46 @@ class Page(models.Model):
     body=models.TextField(help_text='Plain text. HTML is escaped in the storefront.')
     published=models.BooleanField(default=False)
     def __str__(self):return self.title
+
+
+class HomeSection(models.Model):
+    """One block of the homepage. Sections show in 'sort_order'; untick 'active' to hide one."""
+    KINDS=[('hero','Hero banner'),('featured','Featured cards (4 across)'),('collections','Collection tiles'),('cards','Image cards (4 across)'),
+           ('products','Product row'),('confidence','Confidence strip'),('mosaic','Wedding mosaic (6 pictures)'),('banner','Wide promo banner'),
+           ('strip','Style strip (8 small pictures)'),('benefits','Benefits row'),('consult','Appointment / consultation'),
+           ('notes',"Designer's notes"),('story','Brand story text')]
+    kind=models.CharField(max_length=20,choices=KINDS)
+    admin_name=models.CharField('Name (admin only)',max_length=80)
+    eyebrow=models.CharField('Small heading',max_length=120,blank=True)
+    title=models.CharField(max_length=200,blank=True,help_text='Use a new line for a line break.')
+    subtitle=models.CharField(max_length=300,blank=True)
+    text=models.TextField(blank=True)
+    button_label=models.CharField(max_length=60,blank=True)
+    button_url=models.CharField(max_length=200,blank=True)
+    image=models.ImageField(upload_to='home/',blank=True)
+    image_path=models.CharField('…or built-in image',max_length=200,blank=True,help_text='Used when no image is uploaded, e.g. /images/hero.webp')
+    product_filter=models.CharField(max_length=200,blank=True,default='featured=1',help_text='Product rows only. e.g. featured=1, sort=newest, collection=lehengas, occasion=wedding')
+    product_count=models.PositiveIntegerField(default=4)
+    sort_order=models.PositiveIntegerField(default=0)
+    active=models.BooleanField(default=True)
+    class Meta:ordering=['sort_order','id'];verbose_name='Homepage section'
+    def __str__(self):return self.admin_name
+
+class HomeCard(models.Model):
+    ICONS=[('','None'),('award','Award'),('shield','Shield'),('truck','Truck'),('headphones','Headphones'),('package','Package'),
+           ('gem','Gem'),('heart','Heart'),('star','Star'),('sparkles','Sparkles'),('calendar','Calendar'),('ruler','Ruler')]
+    section=models.ForeignKey(HomeSection,on_delete=models.CASCADE,related_name='cards')
+    label=models.CharField('Small label',max_length=80,blank=True)
+    title=models.CharField(max_length=160,blank=True)
+    text=models.TextField(blank=True)
+    bullets=models.TextField(blank=True,help_text='One per line')
+    caption=models.CharField('Link text',max_length=120,blank=True)
+    url=models.CharField(max_length=200,blank=True)
+    button_label=models.CharField(max_length=60,blank=True)
+    icon=models.CharField(max_length=20,choices=ICONS,blank=True)
+    image=models.ImageField(upload_to='home/',blank=True)
+    image_path=models.CharField('…or built-in image',max_length=200,blank=True)
+    sort_order=models.PositiveIntegerField(default=0)
+    active=models.BooleanField(default=True)
+    class Meta:ordering=['sort_order','id']
+    def __str__(self):return self.title or self.label or f'Card {self.pk}'
