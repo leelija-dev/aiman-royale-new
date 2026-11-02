@@ -3,6 +3,34 @@ from pathlib import Path
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _load_env_files(*paths):
+    """Read KEY=value lines from .env files (if present) so settings work when Django is
+    started directly (runserver/gunicorn) as well as under Docker Compose.
+    Variables already set in the real environment always win."""
+    for path in paths:
+        try:
+            lines = Path(path).read_text(encoding='utf-8').splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, _, value = line.partition('=')
+            key = key.strip().removeprefix('export ').strip()
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in '"\'':
+                value = value[1:-1]
+            elif ' #' in value:
+                value = value.split(' #', 1)[0].rstrip()
+            if key:
+                os.environ.setdefault(key, value)
+
+
+# backend/.env first, then the project-root .env used by Docker Compose.
+_load_env_files(BASE_DIR / '.env', BASE_DIR.parent / '.env')
 DEBUG = os.getenv('DJANGO_DEBUG', '0') == '1'
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', '')
 if not SECRET_KEY:

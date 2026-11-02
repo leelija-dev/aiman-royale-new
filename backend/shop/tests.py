@@ -310,3 +310,21 @@ class ReportedIssuesTests(TestCase):
             import config.settings as st;importlib.reload(st)
             self.assertEqual(st.CASHFREE_APP_ID,'TESTabc');self.assertEqual(st.CASHFREE_SECRET_KEY,'cfsk_x')
         importlib.reload(st)
+
+
+class EnvFileTests(TestCase):
+    def test_env_file_values_are_loaded_without_overriding_real_environment(self):
+        import os, tempfile
+        from config.settings import _load_env_files
+        with tempfile.TemporaryDirectory() as d:
+            path=os.path.join(d,'.env')
+            with open(path,'w') as f:f.write('# comment\nAR_TEST_ID="TESTfake123"\nexport AR_TEST_SECRET=cfsk_fake\nAR_TEST_MODE=sandbox # note\nAR_TEST_KEEP=from-file\n')
+            os.environ['AR_TEST_KEEP']='from-environment'
+            try:
+                _load_env_files(path)
+                self.assertEqual(os.environ['AR_TEST_ID'],'TESTfake123')
+                self.assertEqual(os.environ['AR_TEST_SECRET'],'cfsk_fake')
+                self.assertEqual(os.environ['AR_TEST_MODE'],'sandbox')
+                self.assertEqual(os.environ['AR_TEST_KEEP'],'from-environment')
+            finally:
+                for k in ['AR_TEST_ID','AR_TEST_SECRET','AR_TEST_MODE','AR_TEST_KEEP']:os.environ.pop(k,None)
