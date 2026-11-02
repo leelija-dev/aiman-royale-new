@@ -195,3 +195,17 @@ class CategoryContentTests(TestCase):
         self.assertEqual(d['faqs'],[{'question':'Is lining included?','answer':'Yes.'}])
         self.assertEqual(len(d['guides']),3)
         self.assertEqual(d['fitting']['button'],'Book Now')
+
+
+class HomepageTests(TestCase):
+    def test_sections_follow_admin_order_and_visibility(self):
+        from shop.models import HomeSection, HomeCard
+        d=self.client.get('/api/home/').json()['sections']
+        self.assertEqual(d[0]['kind'],'hero');self.assertEqual(len(d),14)
+        hero=HomeSection.objects.get(kind='hero');hero.sort_order=999;hero.save()
+        HomeSection.objects.filter(kind='story').update(active=False)
+        card=HomeCard.objects.filter(section__kind='consult').first();card.title='Custom title';card.save()
+        d=self.client.get('/api/home/').json()['sections']
+        self.assertEqual(d[-1]['kind'],'hero');self.assertNotIn('story',[x['kind'] for x in d])
+        consult=[x for x in d if x['kind']=='consult'][0]
+        self.assertEqual(consult['cards'][0]['title'],'Custom title');self.assertEqual(len(consult['cards'][0]['bullets']),3)

@@ -95,6 +95,18 @@ def facets(request):
                      'price':{'min':price['min'] or 0,'max':price['max'] or 0},
                      'count':len(ids)})
 @api_view(['GET'])
+def home(request):
+    """Homepage sections in display order, managed in admin (Homepage sections)."""
+    img=lambda o:media_url(o.image) or o.image_path
+    out=[]
+    for sec in HomeSection.objects.filter(active=True).prefetch_related('cards'):
+        out.append({'id':sec.id,'kind':sec.kind,'eyebrow':sec.eyebrow,'title':sec.title,'subtitle':sec.subtitle,'text':sec.text,
+                    'button':{'label':sec.button_label,'href':sec.button_url} if sec.button_label else None,'image':img(sec),
+                    'product_filter':sec.product_filter,'product_count':sec.product_count,
+                    'cards':[{'label':c.label,'title':c.title,'text':c.text,'bullets':[b.strip() for b in c.bullets.splitlines() if b.strip()],
+                              'caption':c.caption,'href':c.url,'button':c.button_label,'icon':c.icon,'image':img(c)} for c in sec.cards.all() if c.active]})
+    return Response({'sections':out})
+@api_view(['GET'])
 def products(request,slug=None):
     q=Product.objects.filter(active=True).prefetch_related('images','variants','collections','occasions')
     if slug:return Response(ProductSerializer(get_object_or_404(q,slug=slug)).data)

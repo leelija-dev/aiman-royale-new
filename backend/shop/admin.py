@@ -62,3 +62,13 @@ class MenuLinkInline(admin.TabularInline):model=MenuLink;extra=1;fields=['group'
 class MenuItemAdmin(admin.ModelAdmin):
     list_display=['label','url','sort_order','active'];list_editable=['sort_order','active'];inlines=[MenuLinkInline]
     fieldsets=((None,{'fields':('label','url','sort_order','active','show_occasions')}),('Feature picture (right side of the dropdown)',{'fields':('feature_title','feature_image','feature_url')}))
+class HomeCardInline(admin.StackedInline):
+    model=HomeCard;extra=0
+    fields=[('title','label','sort_order','active'),('caption','url','button_label','icon'),'text','bullets',('image','image_path')]
+@admin.register(HomeSection)
+class HomeSectionAdmin(admin.ModelAdmin):
+    list_display=['admin_name','kind','title','sort_order','active'];list_editable=['sort_order','active'];list_filter=['kind','active'];inlines=[HomeCardInline]
+    fieldsets=((None,{'fields':('admin_name','kind','sort_order','active')}),
+               ('Text',{'fields':('eyebrow','title','subtitle','text','button_label','button_url')}),
+               ('Picture',{'fields':('image','image_path')}),
+               ('Product rows only',{'fields':('product_filter','product_count')}))
