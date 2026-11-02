@@ -4,7 +4,8 @@ import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {useState} from 'react';
 import {Heart, ChevronUp, ArrowDown, ArrowUpRight, ArrowLeft, ArrowRight, LayoutGrid, List, Search} from 'lucide-react';
-import {api, err} from '@/lib/client';
+import {api} from '@/lib/client';
+import {useWishlist} from '@/lib/wishlist';
 import {Product, ProductPage, Facets, money, photo} from '@/lib/types';
 import type {MenuLink} from '@/lib/menu';
 import {type Query, list, toParams} from '@/lib/query';
@@ -57,10 +58,10 @@ export function Filters({base, query, styles = [], facets, variant = 'category'}
 }
 
 /* ---------- Product card ---------- */
-function WishHeart({id}: {id: number}) {
-  const router = useRouter(); const [on, setOn] = useState(false);
-  return <button type="button" className={on ? 'cp-heart on' : 'cp-heart'} aria-label="Add to wishlist" aria-pressed={on}
-    onClick={async () => { try { await api('wishlist/', 'POST', {product: id}); setOn(true); } catch (e) { if (/auth|login|credentials/i.test(err(e))) router.push('/login'); } }}>
+function WishHeart({id, slug}: {id: number; slug: string}) {
+  const router = useRouter(); const [on, toggle] = useWishlist(id);
+  return <button type="button" className={on ? 'cp-heart on' : 'cp-heart'} aria-label={on ? 'Remove from wishlist' : 'Add to wishlist'} aria-pressed={on}
+    onClick={async () => { try { if (await toggle() === 'login') router.push(`/login?next=${encodeURIComponent(`/products/${slug}`)}`); } catch {} }}>
     <Heart size={20} fill={on ? 'currentColor' : 'none'}/>
   </button>;
 }
@@ -72,7 +73,7 @@ function Card({p, hex}: {p: Product; hex: Record<string, string>}) {
     <div className="cp-photo">
       <Link href={`/products/${p.slug}`} aria-label={p.name}><Image src={photo(p)} alt={p.images[0]?.alt || p.name} fill sizes="(max-width:700px) 46vw, (max-width:1100px) 30vw, 22vw"/></Link>
       {off > 0 && <span className="cp-badge">{off}% OFF</span>}
-      <WishHeart id={p.id}/>
+      <WishHeart id={p.id} slug={p.slug}/>
       <Link href={`/products/${p.slug}`} className="cp-quick"><Search size={15}/> Quick View</Link>
     </div>
     <div className="cp-info">

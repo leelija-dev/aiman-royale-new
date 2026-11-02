@@ -27,7 +27,7 @@ class ItemInline(admin.TabularInline):
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display=['id','user','status','total','created_at'];list_filter=['status'];search_fields=['id','user__email','gateway_payment_id'];inlines=[ItemInline]
-    readonly_fields=['id','user','idempotency_key','status','subtotal','discount','shipping','total','address','payment_method','gateway_order_id','payment_session_id','gateway_payment_id','created_at','expires_at']
+    readonly_fields=['id','user','idempotency_key','status','note','pay_with','subtotal','discount','shipping','total','address','payment_method','gateway_order_id','payment_session_id','gateway_payment_id','created_at','expires_at']
     actions=['mark_processing','mark_shipped','mark_delivered']
     @admin.action(description='Mark paid/COD orders processing')
     def mark_processing(self,request,q):q.filter(status__in=['paid','cod']).update(status='processing')
@@ -43,7 +43,7 @@ class AppointmentAdmin(admin.ModelAdmin):
 @admin.register(SiteSettings)
 class SettingsAdmin(admin.ModelAdmin):
     fieldsets=((None,{'fields':('name','announcement','hero_title','hero_description','hero_image')}),
-               ('Contact',{'fields':('phone','email','address')}),
+               ('Contact',{'fields':('phone','email','address','delivery_message')}),
                ('Checkout',{'fields':('shipping_fee','free_shipping_above','cod_enabled')}),
                ('Category page defaults ({name} = collection name)',{'fields':('category_tagline','category_seo_heading','category_seo_body')}),
                ('Fitting banner (all category pages)',{'fields':('fitting_title','fitting_text','fitting_button','fitting_steps','fitting_image')}),
@@ -73,3 +73,9 @@ class HomeSectionAdmin(admin.ModelAdmin):
                ('Text',{'fields':('eyebrow','title','subtitle','text','button_label','button_url')}),
                ('Picture',{'fields':('image','image_path')}),
                ('Product rows only',{'fields':('product_filter','product_count')}))
+@admin.register(Review)
+class ReviewAdmin(admin.ModelAdmin):
+    list_display=['product','name','rating','approved','created_at'];list_filter=['approved','rating'];list_editable=['approved'];search_fields=['product__name','name','text']
+    actions=['approve']
+    @admin.action(description='Approve selected reviews')
+    def approve(self,request,q):q.update(approved=True)

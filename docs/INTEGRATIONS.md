@@ -22,6 +22,24 @@ The API version is explicitly pinned. Sandbox uses `https://sandbox.cashfree.com
 4. Run a sandbox purchase through UPI/card methods available for your account. Verify success, cancellation, failed attempts, delayed success, repeated callbacks, raw-body tampering and incorrect totals. Confirm the provider order against your application order and actual inventory.
 5. After merchant activation and staging acceptance, use production credentials and set `CASHFREE_ENVIRONMENT=production`. Configure the production webhook and approved live domain separately. Never paste secret keys into chat or frontend code; enter them in your server environment/secret manager.
 
+### Staging checklist (sandbox test payment)
+
+Set these in the **server's** `.env` (never in Git):
+
+```dotenv
+CASHFREE_APP_ID=<your TEST app id>
+CASHFREE_SECRET_KEY=<your TEST secret key>
+CASHFREE_ENVIRONMENT=sandbox
+NEXT_PUBLIC_SITE_URL=http://<your-staging-address>      # where shoppers open the site; Cashfree returns here
+CSRF_TRUSTED_ORIGINS=http://<your-staging-address>
+```
+
+- If staging runs over plain `http://` (no SSL), keep `DJANGO_DEBUG=1` on staging, or sign-in, bag and checkout cookies will not be kept. Production must use `https://` with `DJANGO_DEBUG=0`.
+- Restart the backend after changing `.env`, then run `python manage.py migrate`.
+- Admin → Site settings: tick **COD enabled** if you want Cash on Delivery offered.
+- Test: add a product → Buy Now → sign in → fill delivery → choose UPI → tick terms → Continue to Secure Payment. Cashfree's sandbox window opens; use its test UPI ID / test card to pay. The order should show as **paid** in admin and in My Orders.
+- The payment option the shopper picks (UPI, Card, Net Banking) is sent to Cashfree, so its window opens on that option only.
+
 ### Checkout and verification
 
 The frontend loads Cashfree's v3 JavaScript SDK and opens hosted checkout in a modal. Redirect fallback uses the payment-return route. Completion of the SDK promise alone does not mean payment success.

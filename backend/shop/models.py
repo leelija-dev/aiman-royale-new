@@ -30,6 +30,7 @@ class SiteSettings(models.Model):
     fitting_button=models.CharField('Fitting banner button',max_length=40,default='Book a Fitting')
     fitting_steps=models.CharField('Fitting banner steps',max_length=200,default='Choose a date.|Meet our team.|Find your fit.',help_text='Separate steps with |')
     fitting_image=models.ImageField('Fitting banner image',upload_to='editorial/',blank=True)
+    delivery_message=models.CharField('Delivery check message',max_length=200,default='We deliver across India. Shipping charges and timelines are confirmed at checkout.',help_text='Shown after a customer checks a PIN code on a product page.')
     # All Products page (/products)
     shop_eyebrow=models.CharField('Banner small heading',max_length=80,default='The Aiman Royale Collection')
     shop_title=models.CharField('Banner title',max_length=160,default='Find your occasion.\nDiscover your style.')
@@ -121,6 +122,8 @@ class Product(models.Model):
     description=models.TextField(blank=True)
     care=models.TextField(blank=True)
     fabric=models.CharField(max_length=100,blank=True)
+    fit=models.CharField(max_length=100,blank=True,help_text='e.g. Regular')
+    includes=models.CharField(max_length=160,blank=True,help_text='e.g. Suit, skirt & dupatta')
     collections=models.ManyToManyField(Collection,related_name='products')
     occasions=models.ManyToManyField(Occasion,related_name='products',blank=True)
     price=models.DecimalField(max_digits=10,decimal_places=2,validators=[MinValueValidator(Decimal('1'))])
@@ -187,6 +190,8 @@ class Order(models.Model):
     created_at=models.DateTimeField(auto_now_add=True)
     expires_at=models.DateTimeField()
     tracking_url=models.URLField(blank=True)
+    note=models.TextField('Customer note',blank=True)
+    pay_with=models.CharField(max_length=20,blank=True,help_text='Payment option chosen at checkout (upi, card, netbanking)')
     class Meta:ordering=['-created_at']
 
 class OrderItem(models.Model):
@@ -196,6 +201,18 @@ class OrderItem(models.Model):
     unit_price=models.DecimalField(max_digits=10,decimal_places=2)
     quantity=models.PositiveIntegerField()
     measurements=models.JSONField(default=dict)
+
+class Review(models.Model):
+    """Customer review. Shown on the product page only after it is approved in admin."""
+    product=models.ForeignKey(Product,on_delete=models.CASCADE,related_name='reviews')
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True)
+    name=models.CharField(max_length=80)
+    rating=models.PositiveSmallIntegerField(validators=[MinValueValidator(1),MaxValueValidator(5)])
+    text=models.TextField(max_length=2000)
+    approved=models.BooleanField(default=False)
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta:ordering=['-created_at'];constraints=[models.UniqueConstraint(fields=['product','user'],name='one_review_per_customer')]
+    def __str__(self):return f'{self.product} · {self.rating}★ · {self.name}'
 
 class Wishlist(models.Model):
     user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)

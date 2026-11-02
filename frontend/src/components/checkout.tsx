@@ -1,0 +1,194 @@
+'use client';
+import Image from 'next/image';
+import Link from 'next/link';
+import {useEffect, useState} from 'react';
+import {useRouter} from 'next/navigation';
+import {ArrowLeft, ArrowRight, ChevronRight, Landmark, Banknote, CreditCard, Headphones, Phone, Mail, TicketPercent, CheckCircle2, Lock} from 'lucide-react';
+import {api, bagChanged, err} from '@/lib/client';
+import {Bag, Order, Site, User, money, photo} from '@/lib/types';
+import {Steps, COUPON_KEY, NOTE_KEY} from '@/components/bag';
+
+type Quote = {subtotal: string; discount: string; shipping: string; total: string};
+type Address = Record<'name' | 'phone' | 'email' | 'line1' | 'line2' | 'city' | 'state' | 'pincode', string>;
+type Method = 'upi' | 'card' | 'netbanking' | 'cod';
+type CashfreeClient = {checkout: (o: {paymentSessionId: string; redirectTarget: string}) => Promise<{error?: {message?: string}; redirect?: boolean}>};
+declare global { interface Window { Cashfree?: (o: {mode: 'sandbox' | 'production'}) => CashfreeClient } }
+
+const ADDRESS_KEY = 'ar-address';
+const read = (k: string) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
+const write = (k: string, v: string) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch {} };
+const FIELDS: [keyof Address, string, string, string?][] = [
+  ['name', 'Full name', 'name'], ['phone', 'Mobile number', 'tel', '\\+?[1-9][0-9]{9,14}'], ['email', 'Email address', 'email'], ['pincode', 'PIN code', 'postal-code', '[1-9][0-9]{5}'],
+  ['line1', 'House / street address', 'address-line1'], ['line2', 'Apartment / landmark (optional)', 'address-line2'], ['city', 'City', 'address-level2'], ['state', 'State', 'address-level1'],
+];
+
+let sdk: Promise<void> | null = null;
+function loadCashfree() {
+  if (window.Cashfree) return Promise.resolve();
+  if (!sdk) sdk = new Promise<void>((resolve, reject) => {
+    const s = document.createElement('script'); s.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+    s.onload = () => resolve(); s.onerror = () => { sdk = null; s.remove(); reject(Error('Could not load the secure payment window. Please check your connection and try again.')); };
+    document.head.appendChild(s);
+  });
+  return sdk;
+}
+
+function UpiArt() {
+  return <svg viewBox="0 0 150 130" className="co-upi-art" aria-hidden>
+    <circle cx="80" cy="66" r="52" fill="#f6dfe2"/>
+    <path d="M28 108c10-18 22-26 34-30M30 96c6-2 12 0 15 6M26 84c7 0 12 4 13 10" stroke="#c9a27a" strokeWidth="2" fill="none"/>
+    <path d="M130 108c-8-16-18-24-30-28M126 94c-5-1-10 1-12 6M132 82c-6 0-10 3-11 9" stroke="#c9a27a" strokeWidth="2" fill="none"/>
+    <rect x="58" y="12" width="48" height="96" rx="9" fill="#2b2523" transform="rotate(8 82 60)"/>
+    <rect x="62" y="18" width="40" height="84" rx="6" fill="#fbf6f1" transform="rotate(8 82 60)"/>
+    <text x="70" y="52" fontFamily="Arial" fontWeight="700" fontStyle="italic" fontSize="14" fill="#5b5552" transform="rotate(8 82 60)">UPI</text>
+    <path d="M70 68h-4v8M94 68h4v8M70 92h-4v-8M94 92h4v-8" stroke="#2b2523" strokeWidth="2.4" fill="none" transform="rotate(8 82 60)"/>
+  </svg>;
+}
+
+export function CheckoutPage({site}: {site: Site}) {
+  const router = useRouter();
+  const [bag, setBag] = useState<Bag | null>(null), [user, setUser] = useState<User | null>(null), [quote, setQuote] = useState<Quote | null>(null);
+  const [address, setAddress] = useState<Address | null>(null), [editing, setEditing] = useState(true);
+  const [method, setMethod] = useState<Method>('upi'), [agree, setAgree] = useState(false);
+  const [coupon, setCoupon] = useState(''), [promoOpen, setPromoOpen] = useState(false), [promoMsg, setPromoMsg] = useState<{ok: boolean; text: string} | null>(null), [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [order, setOrder] = useState<Order | null>(null), [key, setKey] = useState('');
+
+  useEffect(() => {
+    setKey(crypto.randomUUID());
+    setNote(read(NOTE_KEY));
+    (async () => {
+      try {
+        const [b, me] = await Promise.all([api<Bag>('cart/'), api<{user: User | null}>('auth/me/')]);
+        if (!me.user) { router.replace(`/login?next=${encodeURIComponent('/checkout')}`); return; }
+        setUser(me.user); setBag(b);
+        const saved = read(ADDRESS_KEY);
+        const a: Address = saved ? JSON.parse(saved) : {name: me.user.name || '', phone: me.user.phone || '', email: me.user.email || '', line1: '', line2: '', city: '', state: '', pincode: ''};
+        setAddress(a); setEditing(!saved);
+        if (b.items.length) {
+          const c = read(COUPON_KEY);
+          try { setQuote(await api<Quote>('quote/', 'POST', {coupon: c})); if (c) { setCoupon(c); setPromoMsg({ok: true, text: `Code ${c} applied.`}); } }
+          catch { write(COUPON_KEY, ''); setQuote(await api<Quote>('quote/', 'POST', {})); }
+        }
+      } catch (e) { setError(err(e)); }
+    })();
+  }, [router]);
+
+  async function applyPromo(e: React.FormEvent) {
+    e.preventDefault(); const c = coupon.trim().toUpperCase();
+    try { setQuote(await api<Quote>('quote/', 'POST', {coupon: c})); write(COUPON_KEY, c); setCoupon(c); setPromoMsg(c ? {ok: true, text: `Code ${c} applied.`} : null); }
+    catch (e2) { setPromoMsg({ok: false, text: err(e2)}); }
+  }
+
+  function saveAddress(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const a = Object.fromEntries(FIELDS.map(([k]) => [k, String(f.get(k) || '').trim()])) as Address;
+    setAddress(a); write(ADDRESS_KEY, JSON.stringify(a)); setEditing(false); setError('');
+  }
+
+  async function pay() {
+    if (busy) return;
+    if (!address || editing) { setError('Please save your contact and delivery details first.'); document.getElementById('co-delivery')?.scrollIntoView({behavior: 'smooth'}); return; }
+    if (!agree) { setError('Please accept the Terms & Conditions and Return & Refund Policy.'); return; }
+    if (method === 'cod' && !site.cod_enabled) { setError('Cash on Delivery is not available for this order.'); return; }
+    setBusy(true); setError('');
+    try {
+      const online = method !== 'cod';
+      if (online) await loadCashfree();
+      const d = await api<{order: Order; payment_session_id: string; mode: 'sandbox' | 'production'}>('checkout/', 'POST', {
+        address: {...address, country: 'IN'}, key, coupon: read(COUPON_KEY), method: online ? 'cashfree' : 'cod', pay_with: online ? method : '', note, consent: true});
+      setOrder(d.order); bagChanged();
+      if (d.order.status !== 'pending') { write(COUPON_KEY, ''); write(NOTE_KEY, ''); return; }
+      if (!window.Cashfree || !d.payment_session_id) throw Error('The payment window could not open. Your order is saved in your account — please try again from there or contact us.');
+      const result = await window.Cashfree({mode: d.mode}).checkout({paymentSessionId: d.payment_session_id, redirectTarget: '_modal'});
+      if (result.redirect) return;
+      // Never trust the payment window alone: the server confirms the payment with Cashfree.
+      const verified = await api<Order>('payments/verify/', 'POST', {order: d.order.id});
+      setOrder(verified);
+      if (verified.status === 'pending') setError(result.error?.message ? `Payment was not completed: ${result.error.message}` : 'Payment has not been confirmed yet. If money was taken, do not pay again — check the status in your account.');
+      else { write(COUPON_KEY, ''); write(NOTE_KEY, ''); }
+    } catch (e) { setError(err(e)); } finally { setBusy(false); }
+  }
+
+  if (order && ['paid', 'cod', 'processing', 'shipped', 'delivered'].includes(order.status)) return <section className="cp co-done"><CheckCircle2 size={54}/>
+    <p className="cp-eyebrow">Thank you for choosing Aiman Royale</p><h1>Your order is placed.</h1>
+    <p>Order <strong>{order.id.slice(0, 8).toUpperCase()}</strong> · {money(order.total)}</p>
+    <p>{order.status === 'cod' ? 'Please keep the amount ready — payment is collected on delivery.' : 'Your payment has been received and confirmed.'} We’ll email you updates.</p>
+    <div><Link href="/account" className="pd-btn pd-btn-bag">View My Orders</Link><Link href="/products" className="pd-btn pd-btn-buy">Continue Shopping</Link></div></section>;
+
+  const items = bag?.items || [];
+  const mrp = items.reduce((n, i) => n + Math.max(Number(i.product.mrp), Number(i.product.price)) * i.quantity, 0);
+  const sub = quote ? Number(quote.subtotal) : Number(bag?.subtotal || 0);
+  const methods: {id: Method; label: string; icon?: React.ReactNode; hint?: string}[] = [
+    {id: 'upi', label: 'UPI'}, {id: 'card', label: 'Credit / Debit Card', icon: <CreditCard size={22}/>}, {id: 'netbanking', label: 'Net Banking', icon: <Landmark size={22}/>},
+    {id: 'cod', label: 'Cash on Delivery', icon: <Banknote size={22}/>, hint: site.cod_enabled ? 'Subject to eligibility.' : 'Not available at the moment.'},
+  ];
+
+  return <div className="cp co-page">
+    <div className="co-top"><Link href="/cart" className="co-back"><ArrowLeft size={18}/> Back to Bag</Link><Steps at={address && !editing ? 3 : 2}/><span className="co-secure"><Lock size={17}/> Secure Checkout</span></div>
+    <div className="co-head"><h1>Complete your order</h1><p>A few final steps to bring your Aiman Royale piece home</p></div>
+    {!bag || !user ? <p className="bag-wrap" role="status">{error || 'Preparing your secure checkout…'}</p> : !items.length && !order ? <div className="empty"><h2>Your bag is empty.</h2><Link className="button" href="/products">Discover the Collection</Link></div> :
+    <div className="co-grid">
+      <div>
+        <section className="co-card" id="co-delivery">
+          <div className="co-card-head"><span className="co-num">1</span><div><h2>Contact &amp; Delivery</h2>
+            {address && !editing ? <p className="co-addr">{address.name} · {address.phone}<br/>{address.line1}{address.line2 ? `, ${address.line2}` : ''}, {address.city}, {address.state} {address.pincode}<br/>{address.email}</p> : <p>Add or review your delivery details.</p>}</div>
+            {!editing && <button type="button" className="co-edit" onClick={() => setEditing(true)}>Edit <ChevronRight size={18}/></button>}</div>
+          {editing && address && <form className="co-form" onSubmit={saveAddress}>{FIELDS.map(([k, label, auto, pattern]) =>
+            <label key={k} className={k === 'line1' || k === 'line2' ? 'wide' : ''}>{label}<input name={k} type={k === 'email' ? 'email' : k === 'phone' ? 'tel' : 'text'} required={k !== 'line2'} defaultValue={address[k]} autoComplete={auto} pattern={pattern} inputMode={k === 'pincode' ? 'numeric' : undefined}/></label>)}
+            <p className="co-small wide">We deliver within India.</p>
+            <button className="pd-btn pd-btn-bag wide">Save &amp; Continue <ArrowRight size={17}/></button></form>}
+        </section>
+
+        <section className="co-card">
+          <div className="co-card-head"><span className="co-num on">2</span><div><h2>Payment method</h2></div></div>
+          <div className="co-methods" role="radiogroup" aria-label="Payment method">{methods.map(m => {
+            const disabled = m.id === 'cod' && !site.cod_enabled, on = method === m.id;
+            return <div key={m.id} className={`co-method${on ? ' on' : ''}${disabled ? ' off' : ''}`}>
+              <label><input type="radio" name="method" checked={on} disabled={disabled} onChange={() => setMethod(m.id)}/><span className="co-radio"/>{m.icon}<span className="co-method-text"><strong>{m.label}</strong>{m.hint && <small>{m.hint}</small>}</span>{!on && <ChevronRight size={18}/>}</label>
+              {on && m.id === 'upi' && <div className="co-method-body"><div><p>Continue to our payment partner to choose your UPI app or scan a QR code.</p><small>Available methods are confirmed at checkout.</small></div><UpiArt/></div>}
+              {on && m.id === 'card' && <div className="co-method-body"><div><p>Pay with Visa, Mastercard, RuPay and other cards in our payment partner’s secure window. Card details never touch our servers.</p></div></div>}
+              {on && m.id === 'netbanking' && <div className="co-method-body"><div><p>Choose your bank in our payment partner’s secure window and complete the payment there.</p></div></div>}
+              {on && m.id === 'cod' && <div className="co-method-body"><div><p>Pay in cash when your order arrives. Please keep the exact amount ready.</p></div></div>}
+            </div>; })}</div>
+          {!site.payment_ready && method !== 'cod' && <p className="notice">Online payments are being set up. Please contact the studio for help.</p>}
+        </section>
+
+        <section className="co-card">
+          <div className="co-card-head"><span className="co-num">3</span><div><h2>Review your order</h2><p>Confirm your delivery details and final total before paying.</p>
+            {note && <p className="co-small">Order note: “{note}”</p>}</div></div>
+        </section>
+
+        <label className="co-terms"><input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)}/> <span>I agree to the <Link href="/info/terms">Terms &amp; Conditions</Link> and <Link href="/info/returns">Return &amp; Refund Policy</Link>.</span></label>
+        {error && <p className="pd-err co-error" role="alert">{error}</p>}
+        {order && order.status !== 'paid' && <p className="notice">Order reference {order.id.slice(0, 8).toUpperCase()} · {order.status.replace('_', ' ')}. <Link href="/account">View in your account</Link></p>}
+        <button type="button" className="pd-btn pd-btn-bag co-pay" disabled={busy || !quote || (method !== 'cod' && !site.payment_ready)} onClick={pay}>
+          {busy ? 'Please wait…' : method === 'cod' ? <>Place Order <ArrowRight size={20}/></> : <>Continue to Secure Payment <ArrowRight size={20}/></>}</button>
+        <p className="co-small center">{method === 'cod' ? 'You will pay when your order is delivered.' : 'Payment is completed through our payment partner.'}</p>
+      </div>
+
+      <aside className="co-summary">
+        <div className="co-sum-head"><h2>Order Summary</h2><Link href="/cart">Edit bag <ChevronRight size={16}/></Link></div>
+        {items.map(i => <div className="co-item" key={i.id}><div className="co-item-img"><Image src={photo(i.product)} alt={i.product.name} fill sizes="170px"/></div>
+          <div><h3>{i.product.name}</h3><p>Size {i.variant.size} <span>/</span> {i.variant.colour} <span>/</span> Qty {i.quantity}</p><strong>{money(Number(i.product.price) * i.quantity)}</strong></div></div>)}
+        <hr/>
+        <div className="sum-line"><span>MRP</span><span>{money(mrp)}</span></div>
+        <div className="sum-line"><span>Product discount</span><span>−{money(mrp - sub)}</span></div>
+        <hr/>
+        <div className="sum-line"><span>Subtotal</span><span>{money(sub)}</span></div>
+        {quote && Number(quote.discount) > 0 && <div className="sum-line ok"><span>Promo ({coupon})</span><span>−{money(quote.discount)}</span></div>}
+        <div className="sum-line"><span>Shipping</span><span>{!quote ? 'Pending address confirmation' : Number(quote.shipping) === 0 ? 'Free' : money(quote.shipping)}</span></div>
+        <hr/>
+        <div className="sum-total"><span>Estimated total</span><strong>{money(quote ? quote.total : sub)}</strong></div>
+        <p className="co-small">Final payable amount is confirmed on the payment screen.</p>
+        <div className="co-promo"><button type="button" aria-expanded={promoOpen} onClick={() => setPromoOpen(!promoOpen)}><TicketPercent size={20}/> {coupon && promoMsg?.ok ? `Promo code ${coupon} applied` : 'Add a promo code'}<ChevronRight size={18} className={promoOpen ? 'rot' : ''}/></button>
+          {promoOpen && <form onSubmit={applyPromo}><input value={coupon} onChange={e => setCoupon(e.target.value)} placeholder="Enter promo code" aria-label="Promo code"/><button className="pd-btn-sm">Apply</button></form>}
+          {promoMsg && promoOpen && <p className={promoMsg.ok ? 'pd-ok' : 'pd-err'}>{promoMsg.text}</p>}</div>
+        <div className="co-help"><span className="co-help-icon"><Headphones size={22}/></span><div><strong>Need help with your order?</strong><p>We’re here to assist you.</p>
+          {site.phone && <a href={`tel:+${site.phone.replace(/\D/g, '')}`}><Phone size={17}/> +{site.phone.replace(/\D/g, '')}</a>}
+          {site.email && <a href={`mailto:${site.email}`}><Mail size={17}/> {site.email}</a>}</div></div>
+      </aside>
+    </div>}
+  </div>;
+}
+
