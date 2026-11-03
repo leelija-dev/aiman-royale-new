@@ -41,6 +41,17 @@ class SiteSettings(models.Model):
     youtube_url=models.URLField(blank=True)
     pinterest_url=models.URLField(blank=True)
     footer_tagline=models.CharField(max_length=80,default='Grace in Every Celebration')
+    footer_about=models.TextField('Footer brand text',blank=True)
+    newsletter_eyebrow=models.CharField(max_length=60,default='Never miss an update')
+    newsletter_title=models.CharField(max_length=120,default='Subscribe to Our Newsletter',help_text='The last word is shown in pink.')
+    newsletter_text=models.CharField(max_length=300,blank=True)
+    instagram_handle=models.CharField(max_length=60,blank=True,help_text='e.g. @AimanRoyale')
+    instagram_note=models.CharField(max_length=80,blank=True,help_text='e.g. Join 40K+ fashion enthusiasts')
+    footer_highlights=models.TextField(blank=True,help_text='One per line: TITLE|text (shown bottom-left of the footer)')
+    footer_services=models.TextField(blank=True,help_text='One per line: Title|Small text|icon (icons: cod, truck, check, card, box, return)')
+    payment_methods=models.CharField(max_length=300,blank=True,help_text='Comma separated, e.g. Mastercard, VISA, COD')
+    delivery_partners=models.CharField(max_length=200,blank=True,help_text='Comma separated, e.g. Delhivery')
+    footer_note=models.CharField(max_length=120,blank=True,help_text='Small line under the copyright, e.g. Crafted with love in India')
     delivery_message=models.CharField('Delivery check message',max_length=200,default='We deliver across India. Shipping charges and timelines are confirmed at checkout.',help_text='Shown after a customer checks a PIN code on a product page.')
     # All Products page (/products)
     shop_eyebrow=models.CharField('Banner small heading',max_length=80,default='The Aiman Royale Collection')
@@ -213,6 +224,10 @@ class Order(models.Model):
     tracking_url=models.URLField(blank=True)
     note=models.TextField('Customer note',blank=True)
     pay_with=models.CharField(max_length=20,blank=True,help_text='Payment option chosen at checkout (upi, card, netbanking)')
+    awb=models.CharField('Delhivery AWB (waybill)',max_length=40,blank=True,db_index=True)
+    courier_status=models.CharField(max_length=80,blank=True)
+    tracking_events=models.JSONField(default=list,blank=True)
+    tracking_synced_at=models.DateTimeField(null=True,blank=True)
     class Meta:ordering=['-created_at']
 
 class OrderItem(models.Model):
@@ -287,7 +302,7 @@ class HomeSection(models.Model):
     KINDS=[('hero','Hero banner'),('featured','Featured cards (4 across)'),('collections','Collection tiles'),('cards','Image cards (4 across)'),
            ('products','Product row'),('confidence','Confidence strip'),('mosaic','Wedding mosaic (6 pictures)'),('banner','Wide promo banner'),
            ('strip','Style strip (8 small pictures)'),('benefits','Benefits row'),('consult','Appointment / consultation'),
-           ('notes',"Designer's notes"),('story','Brand story text')]
+           ('notes',"Designer's notes"),('story','Brand story text (with Read more)'),('carousel','Promo banner carousel'),('duo','Two large banners'),('sizeguide','Size guide (chart + how to measure)')]
     kind=models.CharField(max_length=20,choices=KINDS)
     admin_name=models.CharField('Name (admin only)',max_length=80)
     eyebrow=models.CharField('Small heading',max_length=120,blank=True)
@@ -307,7 +322,7 @@ class HomeSection(models.Model):
 
 class HomeCard(models.Model):
     ICONS=[('','None'),('award','Award'),('shield','Shield'),('truck','Truck'),('headphones','Headphones'),('package','Package'),
-           ('gem','Gem'),('heart','Heart'),('star','Star'),('sparkles','Sparkles'),('calendar','Calendar'),('ruler','Ruler')]
+           ('gem','Gem'),('heart','Heart'),('star','Star'),('sparkles','Sparkles'),('calendar','Calendar'),('ruler','Ruler'),('video','Video call'),('user','Person'),('check','Tick')]
     section=models.ForeignKey(HomeSection,on_delete=models.CASCADE,related_name='cards')
     label=models.CharField('Small label',max_length=80,blank=True)
     title=models.CharField(max_length=160,blank=True)
@@ -346,3 +361,25 @@ class MeasureStep(models.Model):
     sort_order=models.PositiveIntegerField(default=0)
     class Meta:ordering=['sort_order','id'];verbose_name='How-to-measure step'
     def __str__(self):return self.title
+
+
+class FooterLink(models.Model):
+    GROUPS=[('categories','Top Categories'),('occasions','Occasions'),('explore','Explore'),('account','My Account')]
+    group=models.CharField(max_length=20,choices=GROUPS)
+    label=models.CharField(max_length=60)
+    url=models.CharField(max_length=200)
+    sort_order=models.PositiveIntegerField(default=0)
+    active=models.BooleanField(default=True)
+    class Meta:ordering=['group','sort_order','id']
+    def __str__(self):return f'{self.get_group_display()} › {self.label}'
+
+class InstagramPost(models.Model):
+    """Photo tile in the footer's 'Follow Our Instagram' block."""
+    caption=models.CharField(max_length=80,blank=True)
+    image=models.ImageField(upload_to='instagram/',blank=True)
+    image_path=models.CharField('…or built-in image',max_length=200,blank=True)
+    url=models.URLField(blank=True,help_text='Post link; leave empty to use the Instagram profile link')
+    sort_order=models.PositiveIntegerField(default=0)
+    active=models.BooleanField(default=True)
+    class Meta:ordering=['sort_order','id']
+    def __str__(self):return self.caption or f'Post {self.pk}'

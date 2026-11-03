@@ -66,7 +66,7 @@ function WishHeart({id, slug}: {id: number; slug: string}) {
   </button>;
 }
 
-function Card({p, hex}: {p: Product; hex: Record<string, string>}) {
+export function Card({p, hex = {}}: {p: Product; hex?: Record<string, string>}) {
   const colours = [...new Set(p.variants.map(v => v.colour.trim()).filter(Boolean).map(c => c.toLowerCase()))];
   const off = discount(p);
   return <article className="cp-card">

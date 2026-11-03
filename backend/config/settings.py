@@ -61,7 +61,7 @@ REDIS_URL=os.getenv('REDIS_URL','')
 CACHES={'default': {'BACKEND':'django.core.cache.backends.redis.RedisCache','LOCATION':REDIS_URL}} if REDIS_URL else {'default':{'BACKEND':'django.core.cache.backends.locmem.LocMemCache'}}
 CELERY_BROKER_URL=REDIS_URL or 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND=CELERY_BROKER_URL
-CELERY_BEAT_SCHEDULE={'expire-unpaid-orders':{'task':'shop.tasks.expire_orders','schedule':60.0}}
+CELERY_BEAT_SCHEDULE={'expire-unpaid-orders':{'task':'shop.tasks.expire_orders','schedule':60.0},'sync-delhivery-tracking':{'task':'shop.tasks.sync_shipments','schedule':1800.0}}
 REST_FRAMEWORK={'DEFAULT_AUTHENTICATION_CLASSES':['rest_framework.authentication.SessionAuthentication'],'DEFAULT_PERMISSION_CLASSES':['rest_framework.permissions.AllowAny'],'DEFAULT_THROTTLE_CLASSES':['rest_framework.throttling.AnonRateThrottle','rest_framework.throttling.UserRateThrottle'],'DEFAULT_THROTTLE_RATES':{'anon':'180/min','user':'360/min','auth':'10/min'},'EXCEPTION_HANDLER':'shop.api.exception_handler'}
 CSRF_TRUSTED_ORIGINS=os.getenv('CSRF_TRUSTED_ORIGINS','http://localhost:3000,http://localhost:8080').split(',')
 SESSION_COOKIE_HTTPONLY=True
@@ -95,6 +95,20 @@ CASHFREE_API_VERSION=os.getenv('CASHFREE_API_VERSION','2025-01-01')
 PUBLIC_SITE_URL=os.getenv('NEXT_PUBLIC_SITE_URL','http://localhost:3000').rstrip('/')
 if CASHFREE_ENVIRONMENT not in ['sandbox','production']:
     raise ImproperlyConfigured('CASHFREE_ENVIRONMENT must be sandbox or production')
+
+# Delhivery courier. Keys live only in backend/.env (never in git).
+# DELHIVERY_API_TOKEN is the standard name; DELHIVERY_API_KEY is accepted too.
+_env_flag=lambda name,default='': os.getenv(name,default).strip().lower() in ('1','true','yes','on')
+DELHIVERY_MODE=(os.getenv('DELHIVERY_MODE') or ('sandbox' if _env_flag('DELHIVERY_SANDBOX','true') else 'production')).strip().lower()
+if DELHIVERY_MODE not in ['sandbox','production']:
+    raise ImproperlyConfigured('DELHIVERY_MODE must be sandbox or production')
+DELHIVERY_API_TOKEN=(os.getenv('DELHIVERY_API_TOKEN') or os.getenv('DELHIVERY_API_KEY','')).strip().strip('"')
+DELHIVERY_BASE_URL=(os.getenv('DELHIVERY_BASE_URL') or ('https://staging-express.delhivery.com' if DELHIVERY_MODE=='sandbox' else 'https://track.delhivery.com')).rstrip('/')
+DELHIVERY_PICKUP_LOCATION=os.getenv('DELHIVERY_PICKUP_LOCATION','').strip().strip('"')
+DELHIVERY_PICKUP_PINCODE=os.getenv('DELHIVERY_PICKUP_PINCODE','').strip()
+DELHIVERY_PACKING_SLIP_API_URL=(os.getenv('DELHIVERY_PACKING_SLIP_API_URL') or DELHIVERY_BASE_URL+'/api/p/packing_slip').strip()
+DELHIVERY_WEIGHT_GRAMS=int(os.getenv('DELHIVERY_WEIGHT_GRAMS','500'))  # per item, used when creating a shipment
+DELHIVERY_SHIPPING_MODE=os.getenv('DELHIVERY_SHIPPING_MODE','Surface')
 WHATSAPP_TOKEN=os.getenv('WHATSAPP_TOKEN','')
 WHATSAPP_PHONE_ID=os.getenv('WHATSAPP_PHONE_ID','')
 WHATSAPP_OTP_TEMPLATE=os.getenv('WHATSAPP_OTP_TEMPLATE','')

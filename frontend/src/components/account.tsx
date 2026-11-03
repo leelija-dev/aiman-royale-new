@@ -37,7 +37,9 @@ function OrderCard({o}: {o: FullOrder}) {
       <div className="ac-ship"><h4><MapPin size={16}/> Delivery address</h4>
         <p><strong>{a.name}</strong><br/>{a.line1}{a.line2 ? `, ${a.line2}` : ''}<br/>{a.city}, {a.state} {a.pincode}<br/>{a.phone}</p>
         <h4><CreditCard size={16}/> Payment</h4><p>{o.payment_method === 'cod' ? 'Cash on Delivery' : 'Paid online (Cashfree)'}{o.pay_with ? ` · ${o.pay_with.toUpperCase()}` : ''}</p>
-        {o.note && <><h4>Note</h4><p>“{o.note}”</p></>}</div>
+        {o.note && <><h4>Note</h4><p>“{o.note}”</p></>}
+        {o.awb && <><h4><Truck size={16}/> Delhivery shipment</h4><p>AWB <strong>{o.awb}</strong>{o.courier_status ? ` · ${o.courier_status}` : ''}</p>
+          {!!o.tracking_events?.length && <ol className="ac-scans">{o.tracking_events.slice(0, 4).map((e, k) => <li key={k}><strong>{e.status}</strong>{e.location && ` · ${e.location}`}<small>{e.time ? new Date(e.time).toLocaleString('en-IN', {dateStyle: 'medium', timeStyle: 'short'}) : ''}{e.detail && ` — ${e.detail}`}</small></li>)}</ol>}</>}</div>
     </div>
     <footer><div className="ac-totals"><span>Subtotal {money(o.subtotal)}</span>{Number(o.discount) > 0 && <span>Discount −{money(o.discount)}</span>}<span>Shipping {Number(o.shipping) ? money(o.shipping) : 'Free'}</span><strong>Total {money(o.total)}</strong></div>
       {o.tracking_url && <a className="pd-btn-sm" href={o.tracking_url} target="_blank" rel="noopener noreferrer"><Truck size={15}/> Track delivery</a>}

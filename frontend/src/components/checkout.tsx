@@ -5,6 +5,7 @@ import {useEffect, useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {ArrowLeft, ArrowRight, ChevronRight, Landmark, Banknote, CreditCard, Headphones, Phone, Mail, TicketPercent, CheckCircle2, Lock} from 'lucide-react';
 import {api, bagChanged, err} from '@/lib/client';
+import type {PinInfo} from '@/lib/types';
 import {Bag, Order, Site, User, money, photo} from '@/lib/types';
 import {Steps, COUPON_KEY, NOTE_KEY} from '@/components/bag';
 import {SavingZone} from '@/components/saving-zone';
@@ -50,6 +51,14 @@ export function CheckoutPage({site}: {site: Site}) {
   const router = useRouter();
   const [bag, setBag] = useState<Bag | null>(null), [user, setUser] = useState<User | null>(null), [quote, setQuote] = useState<Quote | null>(null);
   const [address, setAddress] = useState<Address | null>(null), [editing, setEditing] = useState(true);
+  const [pinInfo, setPinInfo] = useState<PinInfo | null>(null);
+  useEffect(() => {
+    const pin = address?.pincode;
+    if (!pin || !/^[1-9]\d{5}$/.test(pin)) { setPinInfo(null); return; }
+    let live = true;
+    api<PinInfo>(`delivery/pincode/${pin}/`).then(r => { if (live) setPinInfo(r.checked ? r : null); }).catch(() => live && setPinInfo(null));
+    return () => { live = false; };
+  }, [address?.pincode]);
   const [method, setMethod] = useState<Method>('upi'), [agree, setAgree] = useState(false);
   const [coupon, setCoupon] = useState(''), [promoMsg, setPromoMsg] = useState<{ok: boolean; text: string} | null>(null), [note, setNote] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [order, setOrder] = useState<Order | null>(null), [key, setKey] = useState('');
@@ -85,6 +94,8 @@ export function CheckoutPage({site}: {site: Site}) {
     if (busy) return;
     if (!address || editing) { setError('Please save your contact and delivery details first.'); document.getElementById('co-delivery')?.scrollIntoView({behavior: 'smooth'}); return; }
     if (!agree) { setError('Please accept the Terms & Conditions and Return & Refund Policy.'); return; }
+    if (pinInfo && !pinInfo.serviceable) { setError('Delhivery does not deliver to this PIN code yet. Please use another address or contact us on WhatsApp.'); return; }
+    if (method === 'cod' && pinInfo && !pinInfo.cod) { setError('Cash on Delivery is not available for this PIN code. Please choose an online payment option.'); return; }
     if (method === 'cod' && !site.cod_enabled) { setError('Cash on Delivery is not available for this order.'); return; }
     if (method !== 'cod' && !site.payment_ready) { setError('Online payment is not switched on yet — the Cashfree keys are missing on the server. Please choose another option or contact us to complete your order.'); return; }
     setBusy(true); setError('');
@@ -128,7 +139,8 @@ export function CheckoutPage({site}: {site: Site}) {
       <div>
         <section className="co-card" id="co-delivery">
           <div className="co-card-head"><span className="co-num">1</span><div><h2>Contact &amp; Delivery</h2>
-            {address && !editing ? <p className="co-addr">{address.name} · {address.phone}<br/>{address.line1}{address.line2 ? `, ${address.line2}` : ''}, {address.city}, {address.state} {address.pincode}<br/>{address.email}</p> : <p>Add or review your delivery details.</p>}</div>
+            {address && !editing ? <p className="co-addr">{address.name} · {address.phone}<br/>{address.line1}{address.line2 ? `, ${address.line2}` : ''}, {address.city}, {address.state} {address.pincode}<br/>{address.email}</p> : <p>Add or review your delivery details.</p>}
+            {address && !editing && pinInfo && <p className={pinInfo.serviceable ? 'pd-ok' : 'pd-err'}>{pinInfo.serviceable ? `Delivers via Delhivery${pinInfo.cod ? ' · Cash on Delivery available' : ' · Prepaid only'}` : 'Delhivery does not deliver to this PIN code yet.'}</p>}</div>
             {!editing && <button type="button" className="co-edit" onClick={() => setEditing(true)}>Edit <ChevronRight size={18}/></button>}</div>
           {editing && address && <form className="co-form" onSubmit={saveAddress}>{FIELDS.map(([k, label, auto, pattern]) =>
             <label key={k} className={k === 'line1' || k === 'line2' ? 'wide' : ''}>{label}<input name={k} type={k === 'email' ? 'email' : k === 'phone' ? 'tel' : 'text'} required={k !== 'line2'} defaultValue={address[k]} autoComplete={auto} pattern={pattern} inputMode={k === 'pincode' ? 'numeric' : undefined}/></label>)}

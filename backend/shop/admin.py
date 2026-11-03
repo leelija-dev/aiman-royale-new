@@ -27,9 +27,56 @@ class ItemInline(admin.TabularInline):
     def has_add_permission(self,*args):return False
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display=['id','user','status','total','created_at'];list_filter=['status'];search_fields=['id','user__email','gateway_payment_id'];inlines=[ItemInline]
-    readonly_fields=['id','user','idempotency_key','status','note','pay_with','subtotal','discount','shipping','total','address','payment_method','gateway_order_id','payment_session_id','gateway_payment_id','created_at','expires_at']
-    actions=['mark_processing','mark_shipped','mark_delivered']
+    list_filter=['status','courier_status'];inlines=[ItemInline]
+    list_display=['id','user','status','total','awb','courier_status','created_at'];search_fields=['id','user__email','gateway_payment_id','awb']
+    readonly_fields=['id','user','idempotency_key','status','note','pay_with','subtotal','discount','shipping','total','address','payment_method','gateway_order_id','payment_session_id','gateway_payment_id','created_at','expires_at','courier_status','tracking_view','tracking_synced_at']
+    exclude=['tracking_events']
+    actions=['mark_processing','mark_shipped','mark_delivered','delhivery_create','delhivery_track','delhivery_slip','delhivery_pickup','delhivery_cancel']
+    @admin.display(description='Tracking history')
+    def tracking_view(self,o):
+        from django.utils.html import format_html_join
+        return format_html_join('','<div>{} — <b>{}</b> {} <small>{}</small></div>',((e.get('time',''),e.get('status',''),e.get('detail',''),e.get('location','')) for e in o.tracking_events)) or '—'
+    def _each(self,request,q,fn,ok):
+        from django.contrib import messages
+        from . import delhivery
+        done=0
+        for o in q:
+            try:fn(o);done+=1
+            except delhivery.DelhiveryError as e:self.message_user(request,f'Order {str(o.id)[:8].upper()}: {e}',messages.ERROR)
+        if done:self.message_user(request,ok.format(done),messages.SUCCESS)
+    @admin.action(description='Delhivery: create shipment (get AWB)')
+    def delhivery_create(self,request,q):
+        from . import delhivery
+        self._each(request,q,delhivery.create_shipment,'{} shipment(s) booked with Delhivery.')
+    @admin.action(description='Delhivery: refresh tracking')
+    def delhivery_track(self,request,q):
+        from . import delhivery
+        self._each(request,q,delhivery.track,'Tracking refreshed for {} order(s).')
+    @admin.action(description='Delhivery: download packing slips')
+    def delhivery_slip(self,request,q):
+        from django.contrib import messages
+        from django.shortcuts import redirect
+        from django.utils.html import format_html_join
+        from . import delhivery
+        awbs=[o.awb for o in q if o.awb]
+        if not awbs:return self.message_user(request,'Create the Delhivery shipment first (no AWB on the selected orders).',messages.WARNING)
+        try:slip=delhivery.packing_slip(awbs)
+        except delhivery.DelhiveryError as e:return self.message_user(request,str(e),messages.ERROR)
+        if len(slip['links'])==1:return redirect(slip['links'][0])
+        if slip['links']:return self.message_user(request,format_html_join(' ','<a href="{}" target="_blank" rel="noopener">Packing slip {}</a>',((l,i+1) for i,l in enumerate(slip['links']))),messages.SUCCESS)
+        self.message_user(request,'Delhivery returned the slip data without a PDF link. Download it from the Delhivery dashboard.',messages.WARNING)
+    @admin.action(description='Delhivery: request pickup for tomorrow')
+    def delhivery_pickup(self,request,q):
+        from django.contrib import messages
+        from . import delhivery
+        n=q.exclude(awb='').count()
+        if not n:return self.message_user(request,'None of the selected orders has an AWB yet.',messages.WARNING)
+        try:delhivery.request_pickup(n);self.message_user(request,f'Pickup requested for {n} parcel(s).',messages.SUCCESS)
+        except delhivery.DelhiveryError as e:self.message_user(request,str(e),messages.ERROR)
+    @admin.action(description='Delhivery: cancel shipment')
+    def delhivery_cancel(self,request,q):
+        from . import delhivery
+        self._each(request,q.exclude(awb=''),delhivery.cancel,'{} shipment(s) cancelled.')
     @admin.action(description='Mark paid/COD orders processing')
     def mark_processing(self,request,q):q.filter(status__in=['paid','cod']).update(status='processing')
     @admin.action(description='Mark processing orders shipped (set tracking URL first)')
@@ -47,7 +94,7 @@ class SettingsAdmin(admin.ModelAdmin):
                ('Contact',{'fields':('phone','email','address','delivery_message')}),
                ('Size guide popup',{'fields':('size_guide_note','size_chart_pdf')}),
                ('Appointments (Calendly)',{'fields':('calendly_url','calendly_primary_color','calendly_text_color','calendly_background_color')}),
-               ('Footer & social links',{'fields':('footer_tagline','instagram_url','facebook_url','youtube_url','pinterest_url')}),
+               ('Footer & social links',{'fields':('footer_tagline','footer_about','newsletter_eyebrow','newsletter_title','newsletter_text','instagram_handle','instagram_note','instagram_url','facebook_url','youtube_url','pinterest_url','footer_highlights','footer_services','payment_methods','delivery_partners','footer_note')}),
                ('Checkout',{'fields':('shipping_fee','free_shipping_above','cod_enabled')}),
                ('Category page defaults ({name} = collection name)',{'fields':('category_tagline','category_seo_heading','category_seo_body')}),
                ('Fitting banner (all category pages)',{'fields':('fitting_title','fitting_text','fitting_button','fitting_steps','fitting_image')}),
@@ -92,3 +139,9 @@ class SizeChartRowAdmin(admin.ModelAdmin):
 @admin.register(MeasureStep)
 class MeasureStepAdmin(admin.ModelAdmin):
     list_display=['title','sort_order'];list_editable=['sort_order']
+@admin.register(FooterLink)
+class FooterLinkAdmin(admin.ModelAdmin):
+    list_display=['label','group','url','sort_order','active'];list_editable=['url','sort_order','active'];list_filter=['group']
+@admin.register(InstagramPost)
+class InstagramPostAdmin(admin.ModelAdmin):
+    list_display=['caption','sort_order','active'];list_editable=['sort_order','active']

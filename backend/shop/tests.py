@@ -224,7 +224,7 @@ class HomepageTests(TestCase):
     def test_sections_follow_admin_order_and_visibility(self):
         from shop.models import HomeSection, HomeCard
         d=self.client.get('/api/home/').json()['sections']
-        self.assertEqual(d[0]['kind'],'hero');self.assertEqual(len(d),14)
+        self.assertEqual(d[0]['kind'],'hero');self.assertEqual(len(d),15)
         hero=HomeSection.objects.get(kind='hero');hero.sort_order=999;hero.save()
         HomeSection.objects.filter(kind='story').update(active=False)
         card=HomeCard.objects.filter(section__kind='consult').first();card.title='Custom title';card.save()
@@ -258,7 +258,7 @@ class SizeGuideTests(TestCase):
         d=self.client.get('/api/size-guide/').json()
         self.assertEqual([r['size'] for r in d['rows']],['XS','S','M','L','XL','XXL','3XL'])
         self.assertEqual(d['rows'][0],{'size':'XS','alt':'34','bust':34.0,'waist':28.0,'hip':38.5,'armhole':15.5,'uk':'6'})
-        self.assertEqual(len(d['steps']),4);self.assertIn('variations',d['note'])
+        self.assertEqual(len(d['steps']),7);self.assertIn('variations',d['note'])
         SizeChartRow.objects.filter(size='XS').update(bust='33.5')
         self.assertEqual(self.client.get('/api/size-guide/').json()['rows'][0]['bust'],33.5)
 
@@ -363,3 +363,58 @@ class CategoryDetailsTests(TestCase):
         Collection.objects.create(name='Gown',slug='gown-d',details='<p>Lovely <img src=x onerror=alert(1)>gowns</p>')
         d=self.client.get('/api/collections/gown-d/').json()['content']['details']
         self.assertEqual(d,'<p>Lovely gowns</p>')
+
+
+class FakeResponse:
+    def __init__(self,body,status=200):self.body=body;self.status_code=status
+    def json(self):return self.body
+
+DELHIVERY=dict(DELHIVERY_API_TOKEN='test-token',DELHIVERY_MODE='sandbox',DELHIVERY_BASE_URL='https://staging-express.delhivery.com',
+               DELHIVERY_PICKUP_LOCATION='Test-Warehouse',DELHIVERY_PICKUP_PINCODE='700125',
+               DELHIVERY_PACKING_SLIP_API_URL='https://staging-express.delhivery.com/api/p/packing_slip',DELHIVERY_WEIGHT_GRAMS=500,DELHIVERY_SHIPPING_MODE='Surface')
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'],**DELHIVERY)
+class DelhiveryTests(TestCase):
+    def setUp(self):
+        cache.clear();self.u=Customer.objects.create_user(username='d@example.com',email='d@example.com',password='Test-Password-910!')
+        self.p=Product.objects.create(name='Test Suit',slug='test-suit',price='2000',mrp='3000')
+        self.v=Variant.objects.create(product=self.p,sku='TEST-M',size='M',colour='Pink',stock=3)
+        cart=Cart.objects.create(user=self.u);CartItem.objects.create(cart=cart,variant=self.v,quantity=1)
+        addr={'name':'Test Customer','phone':'+919000000001','email':'d@example.com','line1':'Test address','city':'Kolkata','state':'West Bengal','pincode':'700001','country':'IN'}
+        self.o=reserve_order(self.u,cart,addr,uuid.uuid4(),method='cod')[0]
+    def test_pincode_api(self):
+        body={'delivery_codes':[{'postal_code':{'pin':700001,'pre_paid':'Y','cod':'N','city':'Kolkata','state_code':'WB','remarks':''}}]}
+        with patch('shop.delhivery.requests.request',return_value=FakeResponse(body)) as req:
+            r=APIClient().get('/api/delivery/pincode/700001/')
+        self.assertEqual(r.status_code,200);self.assertTrue(r.data['checked']);self.assertTrue(r.data['serviceable']);self.assertFalse(r.data['cod'])
+        self.assertEqual(req.call_args.kwargs['headers']['Authorization'],'Token test-token')
+        self.assertEqual(APIClient().get('/api/delivery/pincode/12345/').status_code,400)
+    def test_pincode_not_serviceable_and_unconfigured(self):
+        with patch('shop.delhivery.requests.request',return_value=FakeResponse({'delivery_codes':[]})):
+            self.assertFalse(APIClient().get('/api/delivery/pincode/110001/').data['serviceable'])
+        with override_settings(DELHIVERY_API_TOKEN=''):
+            r=APIClient().get('/api/delivery/pincode/110002/');self.assertFalse(r.data['checked']);self.assertTrue(r.data['serviceable'])
+    def test_create_shipment_and_track(self):
+        from . import delhivery
+        created={'success':True,'packages':[{'waybill':'1234567890','status':'Success','remarks':[]}]}
+        with patch('shop.delhivery.requests.request',return_value=FakeResponse(created)) as req:
+            self.assertEqual(delhivery.create_shipment(self.o),'1234567890')
+        sent=req.call_args.kwargs['data'].decode()
+        self.assertTrue(sent.startswith('format=json&data='));payload=json.loads(sent.split('data=',1)[1])
+        self.assertEqual(payload['pickup_location']['name'],'Test-Warehouse');self.assertEqual(payload['shipments'][0]['payment_mode'],'COD')
+        self.assertEqual(payload['shipments'][0]['cod_amount'],str(self.o.total));self.assertEqual(payload['shipments'][0]['phone'],'9000000001')
+        self.o.refresh_from_db();self.assertEqual(self.o.status,'processing');self.assertIn('1234567890',self.o.tracking_url)
+        tracked={'ShipmentData':[{'Shipment':{'Status':{'Status':'Delivered'},'Scans':[{'ScanDetail':{'ScanDateTime':'2026-11-03T10:00:00','Scan':'Manifested','Instructions':'Picked','ScannedLocation':'Kolkata'}},
+                 {'ScanDetail':{'ScanDateTime':'2026-11-05T15:00:00','Scan':'Delivered','Instructions':'Delivered to consignee','ScannedLocation':'Kolkata'}}]}}]}
+        with patch('shop.delhivery.requests.request',return_value=FakeResponse(tracked)):delhivery.track(self.o)
+        self.o.refresh_from_db();self.assertEqual(self.o.status,'delivered');self.assertEqual(self.o.tracking_events[0]['status'],'Delivered')
+        c=APIClient();c.force_login(self.u);self.assertEqual(c.get('/api/orders/').data[0]['awb'],'1234567890')
+    def test_failed_booking_keeps_order_unshipped(self):
+        from . import delhivery
+        with patch('shop.delhivery.requests.request',return_value=FakeResponse({'success':False,'packages':[{'status':'Fail','remarks':['Non serviceable pincode']}]})):
+            with self.assertRaisesMessage(delhivery.DelhiveryError,'Non serviceable pincode'):delhivery.create_shipment(self.o)
+        self.o.refresh_from_db();self.assertEqual(self.o.awb,'');self.assertEqual(self.o.status,'cod')
+    def test_bad_token(self):
+        from . import delhivery
+        with patch('shop.delhivery.requests.request',return_value=FakeResponse({'detail':'no'},401)):
+            with self.assertRaisesMessage(delhivery.DelhiveryError,'rejected the API token'):delhivery.pincode('700001')
