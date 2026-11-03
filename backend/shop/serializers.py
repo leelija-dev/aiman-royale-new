@@ -43,4 +43,4 @@ class OrderItemSerializer(serializers.ModelSerializer):
         return im.image.url if im and im.image else ''
 class OrderSerializer(serializers.ModelSerializer):
     items=OrderItemSerializer(many=True,read_only=True)
-    class Meta:model=Order;fields=['id','status','subtotal','discount','shipping','total','address','payment_method','pay_with','note','gateway_order_id','created_at','tracking_url','items']
+    class Meta:model=Order;fields=['id','status','subtotal','discount','shipping','total','address','payment_method','pay_with','note','gateway_order_id','created_at','tracking_url','awb','courier_status','tracking_events','items']

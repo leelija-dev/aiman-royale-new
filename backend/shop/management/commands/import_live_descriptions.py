@@ -4,6 +4,7 @@
     python manage.py import_live_descriptions                 # save (skips categories that already have details)
     python manage.py import_live_descriptions --overwrite     # replace existing details too
     python manage.py import_live_descriptions --slug salwar-kameez --slug gown
+    python manage.py import_live_descriptions --home          # homepage 'About the brand' text (Read more block)
 
 The live page for each collection is https://aimanroyale.com/collections/<slug> (change with --base).
 The description block is found automatically: it is the text block that holds the "Read more" /
@@ -17,7 +18,7 @@ import urllib.request
 from bs4 import BeautifulSoup, NavigableString
 from django.core.management.base import BaseCommand
 
-from shop.models import Collection
+from shop.models import Collection, HomeSection
 from shop.richtext import clean_html
 
 TOGGLE = re.compile(r'^\s*(read\s*more|show\s*less|read\s*less|show\s*more|view\s*more|view\s*less|see\s*more|see\s*less)\s*[.…»›>+\-]*\s*$', re.I)
@@ -114,8 +115,42 @@ class Command(BaseCommand):
         parser.add_argument('--slug', action='append', help='Only these collection slugs (repeatable)')
         parser.add_argument('--dry-run', action='store_true', help='Show what would be saved; change nothing')
         parser.add_argument('--overwrite', action='store_true', help='Replace details that are already filled in')
+        parser.add_argument('--home', action='store_true', help="Import the homepage 'About the brand' text instead of categories")
+
+    def fetch(self, url):
+        req = urllib.request.Request(url, headers={'User-Agent': 'AimanRoyale-ContentImport/1.0', 'Accept': 'text/html'})
+        with urllib.request.urlopen(req, timeout=25) as r:
+            return r.read().decode(r.headers.get_content_charset() or 'utf-8', 'replace')
+
+    def import_home(self, o):
+        sec = HomeSection.objects.filter(kind='story').order_by('sort_order').first()
+        if not sec:
+            self.stdout.write(self.style.WARNING('No "Brand story" section on the homepage. Add one in admin first.'))
+            return
+        url = o['base'].rstrip('/') + '/'
+        try:
+            page = self.fetch(url)
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'✗ could not open {url} ({e})'))
+            return
+        details = extract(page)
+        plain = ' '.join(re.sub(r'<[^>]+>', ' ', details).split())
+        if len(plain) < MIN_CHARS:
+            self.stdout.write(self.style.WARNING(f'✗ no Read more text found on {url}'))
+            return
+        # The section title is shown separately; drop a leading heading that repeats it.
+        details = re.sub(r'^<h2>[^<]*resilience[^<]*</h2>', '', details, flags=re.I)
+        preview = plain[:160] + ('…' if len(plain) > 160 else '')
+        if o['dry_run']:
+            self.stdout.write(f'✓ homepage: would save {len(plain)} characters — "{preview}"')
+        else:
+            sec.text = details
+            sec.save(update_fields=['text'])
+            self.stdout.write(self.style.SUCCESS(f'✓ homepage: saved {len(plain)} characters — "{preview}"'))
 
     def handle(self, *args, **o):
+        if o['home']:
+            return self.import_home(o)
         qs = Collection.objects.all().order_by('name')
         if o['slug']:
             qs = qs.filter(slug__in=o['slug'])

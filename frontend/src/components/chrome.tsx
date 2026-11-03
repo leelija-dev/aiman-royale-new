@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import {useEffect, useState} from 'react';
 import {usePathname} from 'next/navigation';
-import {Search, Heart, ShoppingBag, UserRound, Menu, X, CalendarDays, ArrowRight, MessageCircle, ChevronDown, Phone, Mail, MapPin, Check} from 'lucide-react';
+import {Search, Heart, ShoppingBag, UserRound, Menu, X, CalendarDays, ArrowRight, MessageCircle, ChevronDown, Phone, Mail, MapPin, Check, Banknote, Truck, ShieldCheck, CreditCard, Package, RotateCcw, Lock} from 'lucide-react';
 import {api, err} from '@/lib/client';
 import type {Bag, Site} from '@/lib/types';
 import {mainMenu, FEATURE_FALLBACK, type MenuItem} from '@/lib/menu';
@@ -77,44 +77,70 @@ const SOCIAL: Record<string, {label: string; path: string}> = {
   youtube: {label: 'YouTube', path: 'M21.6 7.2a2.6 2.6 0 0 0-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4A2.6 2.6 0 0 0 2.4 7.2 27 27 0 0 0 2 12a27 27 0 0 0 .4 4.8 2.6 2.6 0 0 0 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4a2.6 2.6 0 0 0 1.8-1.8A27 27 0 0 0 22 12a27 27 0 0 0-.4-4.8ZM10 15V9l5.2 3Z'},
   pinterest: {label: 'Pinterest', path: 'M12.3 2C6.8 2 4 5.9 4 9.2c0 2 .8 3.7 2.4 4.4.3.1.5 0 .6-.3l.2-.9c.1-.3 0-.4-.2-.7a3.4 3.4 0 0 1-.8-2.3 5.6 5.6 0 0 1 5.9-5.7c3.2 0 5 2 5 4.6 0 3.5-1.5 6.4-3.8 6.4a1.9 1.9 0 0 1-1.9-2.3c.4-1.5 1.1-3.2 1.1-4.3a1.6 1.6 0 0 0-1.6-1.8c-1.3 0-2.3 1.3-2.3 3.1a4.6 4.6 0 0 0 .4 1.9l-1.5 6.5a13 13 0 0 0 0 4.5.2.2 0 0 0 .3.1 12 12 0 0 0 2.1-3.8l.8-3.2a3.3 3.3 0 0 0 2.8 1.4c3.7 0 6.2-3.4 6.2-7.9C20.6 5.2 17.3 2 12.3 2Z'},
 };
-const handle = (url: string) => { try { return '@' + new URL(url).pathname.split('/').filter(Boolean)[0]; } catch { return 'Follow us'; } };
+
+const SERVICE_ICONS: Record<string, React.ReactNode> = {cod: <Banknote size={20}/>, truck: <Truck size={20}/>, check: <ShieldCheck size={20}/>, card: <CreditCard size={20}/>, box: <Package size={20}/>, return: <RotateCcw size={20}/>};
+const pinkLast = (t: string) => { const w = t.trim().split(' '); const last = w.pop(); return <>{w.join(' ')} <span className="lf-pink">{last}</span></>; };
 
 export function Footer({site}: {site: Site}) {
   const [message, setMessage] = useState<{ok: boolean; text: string} | null>(null), [busy, setBusy] = useState(false);
+  const f = site.footer;
   const phone = site.phone.replace(/\D/g, '');
   const social = Object.entries(site.social || {});
+  const COLS: [string, string][] = [['categories', 'Top Categories'], ['occasions', 'Occasions'], ['explore', 'Explore'], ['account', 'My Account']];
   return <>
-    <section className="newsletter-band" aria-labelledby="nl-title">
-      <div className="nl-copy"><h2 id="nl-title">Join Our Inner Circle</h2><p>Be the first to know about new arrivals, exclusive offers and style inspiration.</p></div>
-      <form className="nl-form" onSubmit={async e => {
-        e.preventDefault(); setBusy(true); setMessage(null); const f = new FormData(e.currentTarget);
-        try { await api('subscribe/', 'POST', {email: f.get('email'), consent: true}); setMessage({ok: true, text: 'You’re on the list. Thank you!'}); (e.target as HTMLFormElement).reset(); }
-        catch (e2) { setMessage({ok: false, text: err(e2)}); } finally { setBusy(false); }
-      }}>
-        <div className="nl-row"><input required type="email" name="email" autoComplete="email" aria-label="Your email address" placeholder="Enter your email address"/><button disabled={busy}>{busy ? 'Please wait…' : <>Subscribe <ArrowRight size={16}/></>}</button></div>
-        <label className="nl-consent"><input required type="checkbox"/> I agree to receive email updates. <Link href="/info/privacy">Privacy policy</Link></label>
-        {message && <p className={message.ok ? 'nl-msg ok' : 'nl-msg'} role="status">{message.ok && <Check size={16}/>}{message.text}</p>}
-      </form>
-      {site.social?.instagram && <a className="nl-insta" href={site.social.instagram} target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden><path d={SOCIAL.instagram.path}/></svg>{handle(site.social.instagram)}</a>}
-    </section>
-    <footer className="site-footer">
-      <div className="ft-grid">
-        <div className="ft-brand">
-          <Link href="/" className="brand">Aiman <em>Royale</em></Link>
-          <p className="ft-tagline">{site.footer_tagline || 'Grace in Every Celebration'}</p>
-          {social.length > 0 && <div className="ft-social">{social.map(([k, url]) => SOCIAL[k] && <a key={k} href={url} target="_blank" rel="noopener noreferrer" aria-label={SOCIAL[k].label}><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden><path d={SOCIAL[k].path}/></svg></a>)}</div>}
-          {phone && <a className="ft-chat" href={`https://wa.me/${phone}`} target="_blank" rel="noopener noreferrer"><MessageCircle size={18}/> Let’s talk style</a>}
+    <footer className="lf" aria-label="Site footer">
+      <div className="lf-wrap">
+        <div className="lf-top">
+          <section className="lf-news" aria-labelledby="lf-news-title">
+            <p className="lf-eyebrow"><span className="lf-dot"/>{f?.newsletter.eyebrow || 'Never miss an update'}</p>
+            <h2 id="lf-news-title">{pinkLast(f?.newsletter.title || 'Subscribe to Our Newsletter')}</h2>
+            {f?.newsletter.text && <p className="lf-muted">{f.newsletter.text}</p>}
+            <form className="lf-form" onSubmit={async e => {
+              e.preventDefault(); setBusy(true); setMessage(null); const form = e.currentTarget; const d = new FormData(form);
+              try { await api('subscribe/', 'POST', {email: d.get('email'), consent: true}); setMessage({ok: true, text: 'You’re on the list. Thank you!'}); form.reset(); }
+              catch (e2) { setMessage({ok: false, text: err(e2)}); } finally { setBusy(false); }
+            }}>
+              <div className="lf-row"><input required type="email" name="email" autoComplete="email" aria-label="Your email address" placeholder="Your email address"/>
+                <button disabled={busy}>{busy ? 'Please wait…' : <>Subscribe Now <ArrowRight size={16}/></>}</button></div>
+              <label className="lf-consent"><input required type="checkbox"/> I agree to receive email updates. <Link href="/info/privacy">Privacy policy</Link></label>
+              {message && <p className={message.ok ? 'lf-msg ok' : 'lf-msg'} role="status">{message.ok && <Check size={16}/>}{message.text}</p>}
+            </form>
+          </section>
+          {f && f.instagram.posts.length > 0 && <section className="lf-insta" aria-labelledby="lf-insta-title">
+            <p className="lf-handle"><span className="lf-ig"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden><path d={SOCIAL.instagram.path}/></svg></span>{f.instagram.handle}</p>
+            <h2 id="lf-insta-title">{pinkLast('Follow Our Instagram')}</h2>
+            <div className="lf-posts">{f.instagram.posts.slice(0, 4).map((p, i) => <a key={i} href={p.href || f.instagram.url} target="_blank" rel="noopener noreferrer" aria-label={p.caption || 'Instagram post'}><img src={p.image} alt={p.caption} loading="lazy" width={120} height={120}/></a>)}</div>
+            {f.instagram.note && <p className="lf-note">{f.instagram.note}</p>}
+          </section>}
         </div>
-        <div><h4>Shop</h4><Link href="/products?sort=newest">New Arrivals</Link>{site.collections.slice(0, 5).map(c => <Link key={c.id} href={`/collections/${c.slug}`}>{c.name}</Link>)}<Link href="/products">All Collections</Link></div>
-        <div><h4>Customer Care</h4><Link href="/account">Track Your Order</Link><Link href="/info/shipping">Shipping &amp; Delivery</Link><Link href="/info/returns">Returns &amp; Exchanges</Link><Link href="/info/size-guide">Size Guide</Link><Link href="/info/privacy">Privacy Policy</Link></div>
-        <div><h4>Appointments</h4><Link href="/appointment">Book a Fitting</Link><Link href="/appointment">Style Consultation</Link><Link href="/appointment">Virtual Consultation</Link></div>
-        <div className="ft-contact"><h4>Contact Us</h4>
-          {phone && <a href={`tel:+${phone}`}><Phone size={16}/> +{phone}</a>}
-          {site.email && <a href={`mailto:${site.email}`}><Mail size={16}/> <span>{site.email}</span></a>}
-          {site.address && <p><MapPin size={16}/> <span>{site.address}</span></p>}
+
+        <div className="lf-brand">
+          <div><Link href="/" className="brand">Aiman <em>Royale</em></Link>{f?.about && <p className="lf-muted">{f.about}</p>}</div>
+          {social.length > 0 && <div className="lf-social">{social.map(([k, url]) => SOCIAL[k] && <a key={k} href={url} target="_blank" rel="noopener noreferrer" aria-label={SOCIAL[k].label}><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden><path d={SOCIAL[k].path}/></svg></a>)}</div>}
         </div>
+
+        <div className="lf-cols">
+          {COLS.map(([k, title]) => (f?.links[k] || []).length > 0 && <nav key={k} aria-label={title}><h4>{title}</h4><ul>{f!.links[k].map(l => <li key={l.label + l.href}><Link href={l.href}>{l.label}</Link></li>)}</ul></nav>)}
+          <div className="lf-contact"><h4>Contact Info</h4>
+            {site.address && <p><span className="lf-ico"><MapPin size={16}/></span><span><strong>Our Location</strong>{site.address}</span></p>}
+            {phone && <p><span className="lf-ico"><Phone size={16}/></span><span><strong>Call Us</strong><a href={`tel:+${phone}`}>+{phone}</a></span></p>}
+            {site.email && <p><span className="lf-ico"><Mail size={16}/></span><span><strong>Email Us</strong><a href={`mailto:${site.email}`}>{site.email}</a></span></p>}
+          </div>
+        </div>
+
+        {f && (f.highlights.length > 0 || f.payments.length > 0) && <div className="lf-info">
+          <div className="lf-highlights">{f.highlights.map(h => <div key={h.title}><h5>{h.title}</h5><p>{h.text}</p></div>)}</div>
+          {(f.payments.length > 0 || f.delivery.length > 0) && <div className="lf-pay">
+            {f.payments.length > 0 && <><p className="lf-pay-title"><Lock size={14}/> Safe &amp; Secure Payment <em>trusted</em></p><div className="lf-chips">{f.payments.map(m => <span key={m}>{m}</span>)}</div></>}
+            {f.delivery.length > 0 && <><p className="lf-pay-title"><Truck size={14}/> Delivery Partners</p><div className="lf-chips">{f.delivery.map(m => <span key={m}>{m}</span>)}</div></>}
+            {f.payments.some(m => /cod|cash/i.test(m)) && <p className="lf-cod"><Banknote size={14}/> Cash on Delivery available</p>}
+          </div>}
+        </div>}
+
+        {f && f.services.length > 0 && <ul className="lf-services">{f.services.map(sv => <li key={sv.title}><span>{SERVICE_ICONS[sv.icon] || <Check size={20}/>}</span><strong>{sv.title}</strong><small>{sv.text}</small></li>)}</ul>}
+
+        <div className="lf-bottom"><p>© {new Date().getFullYear()} Aiman Royale. All rights reserved.</p>{f?.note && <small>{f.note}</small>}</div>
       </div>
-      <div className="ft-bottom"><span>© {new Date().getFullYear()} Aiman Royale. All rights reserved.</span><span><Link href="/info/privacy">Privacy Policy</Link><Link href="/info/terms">Terms &amp; Conditions</Link><Link href="/appointment">Contact Us</Link></span></div>
     </footer>
     {phone && <a className="whatsapp-float" href={`https://wa.me/${phone}`} target="_blank" rel="noopener noreferrer" aria-label="Chat with Aiman Royale on WhatsApp"><MessageCircle size={23}/></a>}
   </>;

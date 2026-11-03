@@ -6,6 +6,7 @@ import {useRouter} from 'next/navigation';
 import {Heart, ShoppingBag, ArrowRight, Check, X, ZoomIn, Minus, Plus, Ruler, TicketPercent, ChevronDown, Star, PencilLine, CircleAlert, Shirt} from 'lucide-react';
 import {Bag, Product, money, photo, discount} from '@/lib/types';
 import {api, bagChanged, err} from '@/lib/client';
+import type {PinInfo} from '@/lib/types';
 import {useWishlist} from '@/lib/wishlist';
 
 type Popup = {ok: true; title: string; detail: string; image: string} | {ok: false; title: string; detail: string};
@@ -30,6 +31,17 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
   const [busy, setBusy] = useState<'' | 'bag' | 'buy'>(''), [popup, setPopup] = useState<Popup | null>(null), [note, setNote] = useState('');
   const [saved, toggleWish] = useWishlist(p.id);
   const [pin, setPin] = useState(''), [pinMsg, setPinMsg] = useState<{ok: boolean; text: string} | null>(null);
+  const checkPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!/^[1-9]\d{5}$/.test(pin)) return setPinMsg({ok: false, text: 'Please enter a valid 6-digit PIN code.'});
+    setPinMsg({ok: true, text: 'Checking…'});
+    try {
+      const r = await api<PinInfo>(`delivery/pincode/${pin}/`);
+      if (!r.checked) return setPinMsg({ok: true, text: deliveryMessage});
+      setPinMsg(r.serviceable ? {ok: true, text: `Delivery available${r.city ? ` to ${r.city}` : ''} via Delhivery. ${r.cod ? 'Cash on Delivery available.' : 'Prepaid orders only.'} ${deliveryMessage}`.trim()}
+        : {ok: false, text: 'Sorry, we can’t deliver to this PIN code yet. Message us on WhatsApp and we’ll help.'});
+    } catch { setPinMsg({ok: true, text: deliveryMessage}); }
+  };
   const [couponOpen, setCouponOpen] = useState(false), [coupon, setCoupon] = useState(''), [couponMsg, setCouponMsg] = useState('');
   const [tab, setTab] = useState('details'), [pageUrl, setPageUrl] = useState('');
   useEffect(() => setPageUrl(window.location.href.split('#')[0]), []);
@@ -152,7 +164,7 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
 
         <div className="pd-delivery">
           <p className="pd-label">Check delivery at your location</p>
-          <form onSubmit={e => { e.preventDefault(); setPinMsg(/^[1-9]\d{5}$/.test(pin) ? {ok: true, text: deliveryMessage} : {ok: false, text: 'Please enter a valid 6-digit PIN code.'}); }}>
+          <form onSubmit={checkPin}>
             <input value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" placeholder="Enter PIN code" aria-label="PIN code"/><button className="pd-btn-sm">Check</button>
           </form>
           {pinMsg && <p className={pinMsg.ok ? 'pd-ok' : 'pd-err'}>{pinMsg.ok ? <Check size={16}/> : <CircleAlert size={16}/>}{pinMsg.text}</p>}

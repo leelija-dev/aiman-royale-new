@@ -76,7 +76,7 @@ export function SizeGuide() {
     const w = window.open('', '_blank'); if (!w) return;
     const esc = (t: string) => t.replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]!));
     const rows = data.rows.map(r => `<tr><th>${esc(label(r))}</th>${COLS.map(c => `<td>${fmt(r[c], unit)}</td>`).join('')}<td>${esc(r.uk)}</td></tr>`).join('');
-    w.document.write(`<!doctype html><title>Aiman Royale Size Chart</title><style>body{font:14px Arial;margin:30px;color:#222}h1{font:28px Georgia;color:#681628;margin:0 0 4px}table{border-collapse:collapse;width:100%;margin:18px 0}th,td{border:1px solid #ddd;padding:10px;text-align:center}thead th{background:#f5f2ee}p{color:#555}</style>
+    w.document.write(`<!doctype html><title>Aiman Royale Size Chart</title><style>body{font:14px Poppins,Arial,sans-serif;margin:30px;color:#222}h1{font:600 26px Poppins,Arial,sans-serif;color:#a10000;margin:0 0 4px}table{border-collapse:collapse;width:100%;margin:18px 0}th,td{border:1px solid #ddd;padding:10px;text-align:center}thead th{background:#f5f2ee}p{color:#555}</style>
       <h1>Aiman Royale — Size Chart</h1><p>Body measurements in ${unit === 'in' ? 'inches' : 'centimetres'}.</p>
       <table><thead><tr><th>Size</th><th>Bust</th><th>Waist</th><th>Hip</th><th>Armhole</th><th>UK Size</th></tr></thead><tbody>${rows}</tbody></table><p>${esc(data.note)}</p>`);
     w.document.close(); w.focus(); setTimeout(() => w.print(), 300);

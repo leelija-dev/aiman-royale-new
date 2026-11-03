@@ -52,7 +52,7 @@ def merge_cart(request,old_key):
 @api_view(['GET'])
 def site(request):
     s=SiteSettings.current()
-    return Response({'name':s.name,'announcement':s.announcement,'hero_title':s.hero_title,'hero_description':s.hero_description,'hero_image':s.hero_image.url if s.hero_image else '/images/hero.webp','phone':s.phone,'email':s.email,'address':s.address,'cod_enabled':s.cod_enabled,'payment_ready':bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY),'whatsapp_ready':bool(settings.WHATSAPP_TOKEN and settings.WHATSAPP_PHONE_ID and settings.WHATSAPP_OTP_TEMPLATE and settings.WHATSAPP_GRAPH_VERSION),'collections':CollectionSerializer(Collection.objects.filter(active=True),many=True).data,'menu':menu_data(),'delivery_message':s.delivery_message,'calendly':{'url':s.calendly_url,'primary':s.calendly_primary_color,'text':s.calendly_text_color,'background':s.calendly_background_color} if s.calendly_url else None,'social':{k:getattr(s,k+'_url') for k in ['instagram','facebook','youtube','pinterest'] if getattr(s,k+'_url')},'footer_tagline':s.footer_tagline,'shop_page':shop_page(s),'occasions':[occasion_data(o) for o in Occasion.objects.filter(active=True)]})
+    return Response({'name':s.name,'announcement':s.announcement,'hero_title':s.hero_title,'hero_description':s.hero_description,'hero_image':s.hero_image.url if s.hero_image else '/images/hero.webp','phone':s.phone,'email':s.email,'address':s.address,'cod_enabled':s.cod_enabled,'payment_ready':bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY),'whatsapp_ready':bool(settings.WHATSAPP_TOKEN and settings.WHATSAPP_PHONE_ID and settings.WHATSAPP_OTP_TEMPLATE and settings.WHATSAPP_GRAPH_VERSION),'collections':CollectionSerializer(Collection.objects.filter(active=True),many=True).data,'menu':menu_data(),'delivery_message':s.delivery_message,'calendly':{'url':s.calendly_url,'primary':s.calendly_primary_color,'text':s.calendly_text_color,'background':s.calendly_background_color} if s.calendly_url else None,'social':{k:getattr(s,k+'_url') for k in ['instagram','facebook','youtube','pinterest'] if getattr(s,k+'_url')},'footer_tagline':s.footer_tagline,'footer':footer_data(s),'shop_page':shop_page(s),'occasions':[occasion_data(o) for o in Occasion.objects.filter(active=True)]})
 PRICE_STEPS=[5000,8000,10000,15000,20000,30000]
 SIZE_ORDER=['XXS','XS','S','M','L','XL','XXL','2XL','3XL','4XL','5XL','FREE']
 def media_url(f):return f.url if f else ''
@@ -60,6 +60,19 @@ def occasion_data(o,count=None):
     d={'name':o.name,'slug':o.slug,'image':media_url(o.image)}
     if count is not None:d['count']=count
     return d
+def footer_data(s):
+    """Everything the live-style footer shows, managed in admin."""
+    lines=lambda t:[[x.strip() for x in l.split('|')] for l in (t or '').splitlines() if l.strip()]
+    groups={}
+    for l in FooterLink.objects.filter(active=True):groups.setdefault(l.group,[]).append({'label':l.label,'href':l.url})
+    insta=s.instagram_url
+    return {'about':s.footer_about,'newsletter':{'eyebrow':s.newsletter_eyebrow,'title':s.newsletter_title,'text':s.newsletter_text},
+            'instagram':{'handle':s.instagram_handle,'note':s.instagram_note,'url':insta,
+                         'posts':[{'caption':p.caption,'image':media_url(p.image) or p.image_path,'href':p.url or insta} for p in InstagramPost.objects.filter(active=True)[:8]]},
+            'links':groups,'highlights':[{'title':l[0],'text':l[1] if len(l)>1 else ''} for l in lines(s.footer_highlights)],
+            'services':[{'title':l[0],'text':l[1] if len(l)>1 else '','icon':l[2] if len(l)>2 else ''} for l in lines(s.footer_services)],
+            'payments':[x.strip() for x in s.payment_methods.split(',') if x.strip()],'delivery':[x.strip() for x in s.delivery_partners.split(',') if x.strip()],
+            'note':s.footer_note}
 def shop_page(s):
     """Text for the All Products page (Site settings → All Products page)."""
     return {'eyebrow':s.shop_eyebrow,'title':s.shop_title,'text':s.shop_text,'image':media_url(s.shop_image),
@@ -447,3 +460,14 @@ def page(request,slug):
     return Response({'title':p.title,'body':p.body})
 @api_view(['GET'])
 def health(request):return Response({'status':'ok'})
+
+
+@api_view(['GET'])
+def delivery_pincode(request,pin):
+    """Delhivery serviceability for a PIN code (product page and checkout)."""
+    from . import delhivery
+    if not re.fullmatch(r'[1-9]\d{5}',pin):return Response({'detail':'Please enter a valid 6-digit PIN code.'},status=400)
+    if not delhivery.configured():return Response({'checked':False,'serviceable':True,'cod':True,'prepaid':True,'city':'','state':''})
+    try:info=delhivery.pincode(pin)
+    except delhivery.DelhiveryError:return Response({'checked':False,'serviceable':True,'cod':True,'prepaid':True,'city':'','state':''})
+    return Response({'checked':True,**info})
