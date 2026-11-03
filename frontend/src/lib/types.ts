@@ -13,7 +13,8 @@ export type CartItem={id:number;variant:Variant;product:Product;quantity:number;
 export type Bag={items:CartItem[];subtotal:string};
 export type User={id:number;name:string;email:string;phone:string|null;first_name?:string;last_name?:string;marketing_opt_in?:boolean;joined?:string};
 export type Order={id:string;status:string;note?:string;pay_with?:string;subtotal:string;discount:string;shipping:string;total:string;gateway_order_id:string;tracking_url:string;awb?:string;courier_status?:string;tracking_events?:{time:string;status:string;detail:string;location:string}[];created_at:string;items:{name:string;unit_price:string;quantity:number;size:string;colour:string;slug?:string;image?:string}[]};
-export const money=(n:string|number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(Number(n));
+/** ₹ amount; shows paise only when the amount has them (₹13,419.39, ₹4,999), so it matches what the payment page charges. */
+export const money=(n:string|number)=>{const v=Math.round(Number(n)*100)/100;return new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',minimumFractionDigits:Number.isInteger(v)?0:2,maximumFractionDigits:2}).format(v);};
 export const photo=(p:Product)=>p.images[0]?.url||'/images/collection.webp';
 
 /** Whole-number discount, rounded down so it is never overstated (e.g. 54.8% → 54%). */

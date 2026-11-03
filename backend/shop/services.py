@@ -87,15 +87,17 @@ def totals(items,code=''):
     return {'subtotal':subtotal,'discount':discount,'shipping':shipping,'total':money(subtotal-discount+shipping)}
 
 @transaction.atomic
-def reserve_order(user,cart,address,key,code='',method='cashfree'):
+def reserve_order(user,cart,address,key,code='',method='cashfree',only=None):
+    """Create the order from the bag. 'only' = list of bag item ids (Buy Now); other bag items stay in the bag."""
     # Serialise a customer's checkout requests, including repeated idempotency keys.
     Customer.objects.select_for_update().get(pk=user.pk)
     existing=Order.objects.filter(idempotency_key=key,user=user).first()
     if existing:return existing,False
     if Order.objects.filter(idempotency_key=key).exists():raise ValidationError('Invalid checkout key.')
     Cart.objects.select_for_update().get(pk=cart.pk)
-    items=list(cart.items.select_related('variant__product').order_by('variant_id'))
-    if not items:raise ValidationError('Your bag is empty.')
+    chosen=cart.items.filter(pk__in=only) if only else cart.items.all()
+    items=list(chosen.select_related('variant__product').order_by('variant_id'))
+    if not items:raise ValidationError('Your bag is empty.' if not only else 'This item is no longer in your bag.')
     for item in items:
         v=Variant.objects.select_for_update().select_related('product').get(pk=item.variant_id)
         if not v.product.active or v.stock<item.quantity:raise ValidationError(f'{v.product.name}: selected size is no longer available.')
@@ -105,7 +107,8 @@ def reserve_order(user,cart,address,key,code='',method='cashfree'):
     for item in items:
         Variant.objects.filter(pk=item.variant_id).update(stock=F('stock')-item.quantity)
         OrderItem.objects.create(order=order,variant=item.variant,name=item.variant.product.name,unit_price=item.variant.product.price,quantity=item.quantity,measurements=item.measurements)
-    cart.items.all().delete()
+    cart.items.filter(pk__in=[i.pk for i in items]).delete()
+    if order.status=='cod':schedule_shipment(order)
     return order,True
 
 @transaction.atomic
@@ -125,6 +128,7 @@ def settle_payment(payment):
     # Expiry job and webhook acquire same row lock. Never fulfil released inventory.
     order.status='paid' if order.status=='pending' else 'refund_required'
     order.save(update_fields=['status','gateway_payment_id'])
+    if order.status=='paid':schedule_shipment(order)
     return order
 
 def send_otp(phone,code):
@@ -133,3 +137,34 @@ def send_otp(phone,code):
     try:
         r=requests.post(f'https://graph.facebook.com/{settings.WHATSAPP_GRAPH_VERSION}/{settings.WHATSAPP_PHONE_ID}/messages',json=payload,headers={'Authorization':'Bearer '+settings.WHATSAPP_TOKEN},timeout=12);r.raise_for_status()
     except requests.RequestException:raise ProviderUnavailable('We could not send the WhatsApp code. Please try again later.')
+
+
+# ---------- Delhivery: book the shipment as soon as an order is confirmed ----------
+def schedule_shipment(order):
+    """After the order is saved, book it with Delhivery in the background (never slows down checkout)."""
+    from . import delhivery
+    if not settings.DELHIVERY_AUTO_SHIP or not delhivery.configured():return
+    pk=order.pk
+    transaction.on_commit(lambda:start_shipment(pk))
+
+def start_shipment(pk):
+    if settings.REDIS_URL:
+        from .tasks import ship_order
+        try:ship_order.delay(str(pk));return
+        except Exception:pass  # broker down: fall back to a background thread
+    import threading
+    threading.Thread(target=ship_now,args=(pk,),daemon=True).start()
+
+def ship_now(pk):
+    """Create the Delhivery shipment for one order. A failure is shown on the order in admin."""
+    from django.db import close_old_connections
+    from . import delhivery
+    close_old_connections()
+    try:
+        order=Order.objects.get(pk=pk)
+        if order.awb:return order.awb
+        try:return delhivery.create_shipment(order)
+        except delhivery.DelhiveryError as e:
+            Order.objects.filter(pk=pk,awb='').update(courier_status=('Booking failed: '+str(e))[:80])
+    finally:
+        close_old_connections()

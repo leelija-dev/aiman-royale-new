@@ -38,11 +38,13 @@ function OrderCard({o}: {o: FullOrder}) {
         <p><strong>{a.name}</strong><br/>{a.line1}{a.line2 ? `, ${a.line2}` : ''}<br/>{a.city}, {a.state} {a.pincode}<br/>{a.phone}</p>
         <h4><CreditCard size={16}/> Payment</h4><p>{o.payment_method === 'cod' ? 'Cash on Delivery' : 'Paid online (Cashfree)'}{o.pay_with ? ` · ${o.pay_with.toUpperCase()}` : ''}</p>
         {o.note && <><h4>Note</h4><p>“{o.note}”</p></>}
-        {o.awb && <><h4><Truck size={16}/> Delhivery shipment</h4><p>AWB <strong>{o.awb}</strong>{o.courier_status ? ` · ${o.courier_status}` : ''}</p>
+        {['paid', 'cod', 'processing', 'shipped', 'delivered'].includes(o.status) && <><h4><Truck size={16}/> Shipment (Delhivery)</h4>
+          <p>{o.awb ? <>Waybill (AWB) <strong>{o.awb}</strong>{o.courier_status ? ` · ${o.courier_status}` : ''}</> : 'Waybill number will appear here once your parcel is booked with Delhivery.'}</p></>}
+        {o.awb && <>
           {!!o.tracking_events?.length && <ol className="ac-scans">{o.tracking_events.slice(0, 4).map((e, k) => <li key={k}><strong>{e.status}</strong>{e.location && ` · ${e.location}`}<small>{e.time ? new Date(e.time).toLocaleString('en-IN', {dateStyle: 'medium', timeStyle: 'short'}) : ''}{e.detail && ` — ${e.detail}`}</small></li>)}</ol>}</>}</div>
     </div>
     <footer><div className="ac-totals"><span>Subtotal {money(o.subtotal)}</span>{Number(o.discount) > 0 && <span>Discount −{money(o.discount)}</span>}<span>Shipping {Number(o.shipping) ? money(o.shipping) : 'Free'}</span><strong>Total {money(o.total)}</strong></div>
-      {o.tracking_url && <a className="pd-btn-sm" href={o.tracking_url} target="_blank" rel="noopener noreferrer"><Truck size={15}/> Track delivery</a>}
+      {(o.tracking_url || o.awb) && <a className="pd-btn-sm ac-track-btn" href={o.tracking_url || `https://www.delhivery.com/track/package/${o.awb}`} target="_blank" rel="noopener noreferrer"><Truck size={15}/> Track order</a>}
       {o.status === 'pending' && <Link className="pd-btn-sm" href={`/payment/return?order=${o.id}`}>Check payment status</Link>}</footer>
     {o.status === 'pending' && <p className="ac-hint">Payment is awaiting confirmation. Unpaid orders are released after 30 minutes. If you were charged, contact us with this order number before paying again.</p>}
     {o.status === 'refund_required' && <p className="ac-hint">Your payment arrived after the reservation closed. Our team will reconcile it — please contact us with this order number.</p>}
@@ -87,23 +89,24 @@ function Profile({user, onSaved}: {user: User; onSaved: (u: User) => void}) {
   </div>;
 }
 
-export function AccountPage() {
+export function AccountPage({section}: {section?: 'orders'}) {
   const router = useRouter(), params = useSearchParams();
-  const tab = params.get('tab') || 'orders';
+  const tab = section || (['appointments', 'profile'].includes(params.get('tab') || '') ? params.get('tab')! : params.get('tab') === 'orders' ? 'orders' : 'profile');
+  useEffect(() => { if (!section && params.get('tab') === 'orders') router.replace('/account/orders'); }, [section, params, router]);
   const [user, setUser] = useState<User | null>(null), [orders, setOrders] = useState<FullOrder[] | null>(null), [appts, setAppts] = useState<Appt[] | null>(null), [error, setError] = useState('');
   useEffect(() => {
     api<{user: User | null}>('auth/me/').then(async d => {
-      if (!d.user) { router.replace(`/login?next=${encodeURIComponent('/account')}`); return; }
+      if (!d.user) { router.replace(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
       setUser(d.user);
       const [o, a] = await Promise.all([api<FullOrder[]>('orders/'), api<Appt[]>('appointments/mine/').catch(() => [])]);
       setOrders(o); setAppts(a);
     }).catch(e => setError(err(e)));
   }, [router]);
-  const go = (t: string) => router.replace(`/account?tab=${t}`, {scroll: false});
+  const go = (t: string) => t === 'orders' ? router.push('/account/orders') : section ? router.push(`/account?tab=${t}`) : router.replace(`/account?tab=${t}`, {scroll: false});
   async function signOut() { try { await api('auth/logout/', 'POST', {}); bagChanged(); router.push('/'); router.refresh(); } catch (e) { setError(err(e)); } }
 
   if (!user) return <section className="ac-page"><p className="ac-loading">{error || 'Loading your account…'}</p></section>;
-  const tabs: [string, string, React.ReactNode, number?][] = [['orders', 'My Orders', <Package key="o" size={18}/>, orders?.length], ['appointments', 'Appointments', <CalendarDays key="a" size={18}/>, appts?.length], ['profile', 'Profile Settings', <UserRound key="p" size={18}/>]];
+  const tabs: [string, string, React.ReactNode, number?][] = [['profile', 'Profile Settings', <UserRound key="p" size={18}/>], ['orders', 'Order History', <Package key="o" size={18}/>, orders?.length], ['appointments', 'Appointments', <CalendarDays key="a" size={18}/>, appts?.length]];
   return <section className="ac-page">
     <aside className="ac-side">
       <div className="ac-profile"><span className="ac-avatar">{initials(user)}</span>
@@ -115,7 +118,7 @@ export function AccountPage() {
     </aside>
     <div className="ac-main">
       {error && <p className="pd-err">{error}</p>}
-      {tab === 'orders' && <><h2>My Orders</h2>{orders === null ? <p>Loading orders…</p> : !orders.length
+      {tab === 'orders' && <><h2>Order History</h2>{orders === null ? <p>Loading orders…</p> : !orders.length
         ? <div className="ac-empty"><ShoppingBag size={34}/><p>You haven’t placed an order yet.</p><Link href="/products" className="pd-btn pd-btn-bag">Start shopping</Link></div>
         : orders.map(o => <OrderCard key={o.id} o={o}/>)}</>}
       {tab === 'appointments' && <><h2>Appointments</h2>{appts === null ? <p>Loading…</p> : !appts.length

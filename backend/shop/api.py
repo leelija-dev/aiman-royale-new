@@ -375,9 +375,16 @@ def wishlist(request):
         if request.method=='POST':Wishlist.objects.get_or_create(user=request.user,product=p)
         else:Wishlist.objects.filter(user=request.user,product=p).delete()
     return Response(ProductSerializer(Product.objects.filter(wishlist__user=request.user).prefetch_related('images','variants','collections'),many=True).data)
+def chosen_items(request):
+    """Bag item ids sent by Buy Now ('items'); empty = the whole bag."""
+    raw=request.data.get('items') or []
+    if not isinstance(raw,list):raise ValidationError('Invalid items.')
+    try:return [int(x) for x in raw][:50]
+    except (TypeError,ValueError):raise ValidationError('Invalid items.')
 @api_view(['POST'])
 def quote(request):
-    items=list(get_cart(request).items.select_related('variant__product'))
+    only=chosen_items(request);q=get_cart(request).items.select_related('variant__product')
+    items=list(q.filter(pk__in=only) if only else q)
     if not items:raise ValidationError('Your bag is empty.')
     return Response(totals(items,str(request.data.get('coupon',''))))
 @api_view(['POST'])
@@ -394,7 +401,7 @@ def checkout(request):
     pay_with=str(request.data.get('pay_with','') or '')
     if pay_with and pay_with not in PAY_WITH:raise ValidationError('Unknown payment option.')
     note=str(request.data.get('note','') or '').strip()[:500]
-    o,created=reserve_order(request.user,get_cart(request),address.validated_data,key,str(request.data.get('coupon','')),method)
+    o,created=reserve_order(request.user,get_cart(request),address.validated_data,key,str(request.data.get('coupon','')),method,only=chosen_items(request))
     if created and (note or pay_with):
         o.note,o.pay_with=note,(pay_with if method=='cashfree' else '')
         o.save(update_fields=['note','pay_with'])

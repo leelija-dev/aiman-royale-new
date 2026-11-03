@@ -6,7 +6,7 @@ import {get} from '@/lib/server';
 import {ProductPage} from '@/lib/types';
 import {Card} from '@/components/collection-page';
 import {CategoryDetails} from '@/components/category-details';
-import {PromoCarousel, Scroller, HomeSizeGuide, NotesCarousel, type SizeGuideData} from '@/components/home-extras';
+import {PromoCarousel, Scroller, HomeSizeGuide, NotesCarousel, HeroSlider, type SizeGuideData} from '@/components/home-extras';
 
 export const metadata = {alternates: {canonical: '/'}};
 
@@ -38,8 +38,8 @@ function render(s: Section, products: Record<number, ProductPage>, sizeGuide: Si
   const c = s.cards;
   switch (s.kind) {
     case 'hero':
-      return <section className="luxury-hero"><Image src={s.image || '/images/home-hero.webp'} alt={s.title.replace(/\n/g, ' ') || 'Aiman Royale'} fill priority sizes="100vw" quality={85}/>
-        <div>{s.eyebrow && <p className="eyebrow">{s.eyebrow}</p>}<h1>{lines(s.title)}</h1>{s.subtitle && <p>{s.subtitle}</p>}{s.button && <Link className="button" href={s.button.href}>{s.button.label} <ArrowRight size={16}/></Link>}</div></section>;
+      return <HeroSlider slides={[{eyebrow: s.eyebrow, title: s.title, subtitle: s.subtitle, button: s.button, image: s.image || '/images/home-hero.webp'},
+        ...c.map(x => ({eyebrow: x.label, title: x.title, subtitle: x.caption || x.text, button: x.button ? {label: x.button, href: x.href || '/products'} : null, image: x.image || '/images/home-hero.webp'}))]}/>;
     case 'featured': // circular "Most Loved" row — shown on phones, like the live site
       return <Wrap cls="lh-mobile-only"><section className="lh-loved" aria-label={s.title || 'Most loved'}>{c.map(x =>
         <Link key={x.title + x.href} href={x.href || '/products'}><span><Image src={x.image || IMG} alt="" fill sizes="96px"/></span><strong>{x.title}</strong>{x.caption && <small>{x.caption}</small>}</Link>)}</section></Wrap>;

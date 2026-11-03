@@ -14,3 +14,8 @@ def sync_shipments():
     for order in Order.objects.exclude(awb='').filter(status__in=['processing','shipped']).exclude(courier_status='Cancelled')[:200]:
         try:delhivery.track(order)
         except delhivery.DelhiveryError:continue
+
+@shared_task
+def ship_order(pk):
+    from .services import ship_now
+    ship_now(pk)

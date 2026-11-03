@@ -299,7 +299,7 @@ class Page(models.Model):
 
 class HomeSection(models.Model):
     """One block of the homepage. Sections show in 'sort_order'; untick 'active' to hide one."""
-    KINDS=[('hero','Hero banner'),('featured','Featured cards (4 across)'),('collections','Collection tiles'),('cards','Image cards (4 across)'),
+    KINDS=[('hero','Hero banner (add cards below for more slides)'),('featured','Featured cards (4 across)'),('collections','Collection tiles'),('cards','Image cards (4 across)'),
            ('products','Product row'),('confidence','Confidence strip'),('mosaic','Wedding mosaic (6 pictures)'),('banner','Wide promo banner'),
            ('strip','Style strip (8 small pictures)'),('benefits','Benefits row'),('consult','Appointment / consultation'),
            ('notes',"Designer's notes"),('story','Brand story text (with Read more)'),('carousel','Promo banner carousel'),('duo','Two large banners'),('sizeguide','Size guide (chart + how to measure)')]
