@@ -38,7 +38,7 @@ if not SECRET_KEY:
     else: raise ImproperlyConfigured('DJANGO_SECRET_KEY must be configured')
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,backend,172.18.99.117').split(',')
 INSTALLED_APPS = ['django.contrib.admin','django.contrib.auth','django.contrib.contenttypes','django.contrib.sessions','django.contrib.messages','django.contrib.staticfiles','rest_framework','shop']
-MIDDLEWARE = ['django.middleware.security.SecurityMiddleware','whitenoise.middleware.WhiteNoiseMiddleware','django.contrib.sessions.middleware.SessionMiddleware','django.middleware.common.CommonMiddleware','django.middleware.csrf.CsrfViewMiddleware','django.contrib.auth.middleware.AuthenticationMiddleware','django.contrib.messages.middleware.MessageMiddleware','django.middleware.clickjacking.XFrameOptionsMiddleware']
+MIDDLEWARE = ['django.middleware.security.SecurityMiddleware','whitenoise.middleware.WhiteNoiseMiddleware','shop.middleware.SplitSessionMiddleware','django.middleware.common.CommonMiddleware','django.middleware.csrf.CsrfViewMiddleware','django.contrib.auth.middleware.AuthenticationMiddleware','django.contrib.messages.middleware.MessageMiddleware','django.middleware.clickjacking.XFrameOptionsMiddleware']
 ROOT_URLCONF='config.urls'
 TEMPLATES=[{'BACKEND':'django.template.backends.django.DjangoTemplates','DIRS':[BASE_DIR/'shop'/'templates'],'APP_DIRS':True,'OPTIONS':{'context_processors':['django.template.context_processors.request','django.contrib.auth.context_processors.auth','django.contrib.messages.context_processors.messages']}}]
 WSGI_APPLICATION='config.wsgi.application'
@@ -65,6 +65,7 @@ CELERY_BEAT_SCHEDULE={'expire-unpaid-orders':{'task':'shop.tasks.expire_orders',
 REST_FRAMEWORK={'DEFAULT_AUTHENTICATION_CLASSES':['rest_framework.authentication.SessionAuthentication'],'DEFAULT_PERMISSION_CLASSES':['rest_framework.permissions.AllowAny'],'DEFAULT_THROTTLE_CLASSES':['rest_framework.throttling.AnonRateThrottle','rest_framework.throttling.UserRateThrottle'],'DEFAULT_THROTTLE_RATES':{'anon':'180/min','user':'360/min','auth':'10/min'},'EXCEPTION_HANDLER':'shop.api.exception_handler'}
 CSRF_TRUSTED_ORIGINS=os.getenv('CSRF_TRUSTED_ORIGINS','http://localhost:3000,http://localhost:8080').split(',')
 SESSION_COOKIE_HTTPONLY=True
+ADMIN_SESSION_COOKIE_NAME='admin_sessionid'  # admin login is kept separate from the customer login
 SESSION_COOKIE_SAMESITE='Lax'
 CSRF_COOKIE_SAMESITE='Lax'
 SESSION_COOKIE_SECURE=not DEBUG
@@ -109,6 +110,8 @@ DELHIVERY_PICKUP_PINCODE=os.getenv('DELHIVERY_PICKUP_PINCODE','').strip()
 DELHIVERY_PACKING_SLIP_API_URL=(os.getenv('DELHIVERY_PACKING_SLIP_API_URL') or DELHIVERY_BASE_URL+'/api/p/packing_slip').strip()
 DELHIVERY_WEIGHT_GRAMS=int(os.getenv('DELHIVERY_WEIGHT_GRAMS','500'))  # per item, used when creating a shipment
 DELHIVERY_SHIPPING_MODE=os.getenv('DELHIVERY_SHIPPING_MODE','Surface')
+# Book the Delhivery shipment automatically when an order is paid or placed as COD.
+DELHIVERY_AUTO_SHIP=_env_flag('DELHIVERY_AUTO_SHIP','true')
 WHATSAPP_TOKEN=os.getenv('WHATSAPP_TOKEN','')
 WHATSAPP_PHONE_ID=os.getenv('WHATSAPP_PHONE_ID','')
 WHATSAPP_OTP_TEMPLATE=os.getenv('WHATSAPP_OTP_TEMPLATE','')

@@ -61,23 +61,30 @@ export function CheckoutPage({site}: {site: Site}) {
   }, [address?.pincode]);
   const [method, setMethod] = useState<Method>('upi'), [agree, setAgree] = useState(false);
   const [coupon, setCoupon] = useState(''), [promoMsg, setPromoMsg] = useState<{ok: boolean; text: string} | null>(null), [note, setNote] = useState('');
+  const [itemIds, setItemIds] = useState<number[]>([]);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [order, setOrder] = useState<Order | null>(null), [key, setKey] = useState('');
 
   useEffect(() => {
     setKey(crypto.randomUUID());
     setNote(read(NOTE_KEY));
+    // Buy Now sends ?item=<bag item id>: check out only that item and leave the rest in the bag.
+    const only = Number(new URLSearchParams(window.location.search).get('item')) || 0;
     (async () => {
       try {
-        const [b, me] = await Promise.all([api<Bag>('cart/'), api<{user: User | null}>('auth/me/')]);
-        if (!me.user) { router.replace(`/login?next=${encodeURIComponent('/checkout')}`); return; }
+        const [full, me] = await Promise.all([api<Bag>('cart/'), api<{user: User | null}>('auth/me/')]);
+        if (!me.user) { router.replace(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
+        const picked = only ? full.items.filter(i => i.id === only) : [];
+        const b = picked.length ? {...full, items: picked} : full;
+        setItemIds(picked.length ? [only] : []);
         setUser(me.user); setBag(b);
+        const q = picked.length ? {items: [only]} : {};
         const saved = read(ADDRESS_KEY);
         const a: Address = saved ? JSON.parse(saved) : {name: me.user.name || '', phone: me.user.phone || '', email: me.user.email || '', line1: '', line2: '', city: '', state: '', pincode: ''};
         setAddress(a); setEditing(!saved);
         if (b.items.length) {
           const c = read(COUPON_KEY);
-          try { setQuote(await api<Quote>('quote/', 'POST', {coupon: c})); if (c) { setCoupon(c); setPromoMsg({ok: true, text: 'Coupon applied.'}); } }
-          catch { write(COUPON_KEY, ''); setQuote(await api<Quote>('quote/', 'POST', {})); }
+          try { setQuote(await api<Quote>('quote/', 'POST', {...q, coupon: c})); if (c) { setCoupon(c); setPromoMsg({ok: true, text: 'Coupon applied.'}); } }
+          catch { write(COUPON_KEY, ''); setQuote(await api<Quote>('quote/', 'POST', q)); }
         }
       } catch (e) { setError(err(e)); }
     })();
@@ -103,7 +110,7 @@ export function CheckoutPage({site}: {site: Site}) {
       const online = method !== 'cod';
       if (online) await loadCashfree();
       const d = await api<{order: Order; payment_session_id: string; mode: 'sandbox' | 'production'}>('checkout/', 'POST', {
-        address: {...address, country: 'IN'}, key, coupon: read(COUPON_KEY), method: online ? 'cashfree' : 'cod', pay_with: online ? method : '', note, consent: true});
+        address: {...address, country: 'IN'}, key, coupon: read(COUPON_KEY), method: online ? 'cashfree' : 'cod', pay_with: online ? method : '', note, consent: true, ...(itemIds.length ? {items: itemIds} : {})});
       setOrder(d.order); bagChanged();
       if (d.order.status !== 'pending') { write(COUPON_KEY, ''); write(NOTE_KEY, ''); return; }
       if (!window.Cashfree || !d.payment_session_id) throw Error('The payment window could not open. Your order is saved in your account — please try again from there or contact us.');
@@ -121,7 +128,7 @@ export function CheckoutPage({site}: {site: Site}) {
     <p className="cp-eyebrow">Thank you for choosing Aiman Royale</p><h1>Your order is placed.</h1>
     <p>Order <strong>{order.id.slice(0, 8).toUpperCase()}</strong> · {money(order.total)}</p>
     <p>{order.status === 'cod' ? 'Please keep the amount ready — payment is collected on delivery.' : 'Your payment has been received and confirmed.'} We’ll email you updates.</p>
-    <div><Link href="/account" className="pd-btn pd-btn-bag">View My Orders</Link><Link href="/products" className="pd-btn pd-btn-buy">Continue Shopping</Link></div></section>;
+    <div><Link href="/account/orders" className="pd-btn pd-btn-bag">View My Orders</Link><Link href="/products" className="pd-btn pd-btn-buy">Continue Shopping</Link></div></section>;
 
   const items = bag?.items || [];
   const mrp = items.reduce((n, i) => n + Math.max(Number(i.product.mrp), Number(i.product.price)) * i.quantity, 0);
@@ -169,7 +176,7 @@ export function CheckoutPage({site}: {site: Site}) {
 
         <label className="co-terms"><input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)}/> <span>I agree to the <Link href="/info/terms">Terms &amp; Conditions</Link> and <Link href="/info/returns">Return &amp; Refund Policy</Link>.</span></label>
         {error && <p className="pd-err co-error" role="alert">{error}</p>}
-        {order && order.status !== 'paid' && <p className="notice">Order reference {order.id.slice(0, 8).toUpperCase()} · {order.status.replace('_', ' ')}. <Link href="/account">View in your account</Link></p>}
+        {order && order.status !== 'paid' && <p className="notice">Order reference {order.id.slice(0, 8).toUpperCase()} · {order.status.replace('_', ' ')}. <Link href="/account/orders">View in your account</Link></p>}
         <button type="button" className="pd-btn pd-btn-bag co-pay" disabled={busy || !quote} onClick={pay}>
           {busy ? 'Please wait…' : method === 'cod' ? <>Place Order <ArrowRight size={20}/></> : <>Continue to Secure Payment <ArrowRight size={20}/></>}</button>
         <p className="co-small center">{method === 'cod' ? 'You will pay when your order is delivered.' : 'Payment is completed through our payment partner.'}</p>
@@ -190,8 +197,8 @@ export function CheckoutPage({site}: {site: Site}) {
         <div className="sum-total"><span>Estimated total</span><strong>{money(quote ? quote.total : sub)}</strong></div>
         <p className="co-small">Final payable amount is confirmed on the payment screen.</p>
         <SavingZone applied={coupon && promoMsg?.ok ? coupon : ''} refreshKey={bag}
-          onApply={async c => { try { const q = await api<Quote>('quote/', 'POST', {coupon: c}); setQuote(q); write(COUPON_KEY, c); setCoupon(c); setPromoMsg({ok: true, text: `You save ${money(q.discount)}`}); } catch (e2) { setPromoMsg({ok: false, text: err(e2)}); } }}
-          onRemove={async () => { write(COUPON_KEY, ''); setCoupon(''); setPromoMsg(null); try { setQuote(await api<Quote>('quote/', 'POST', {})); } catch {} }} message={promoMsg}/>
+          onApply={async c => { try { const q = await api<Quote>('quote/', 'POST', {coupon: c, ...(itemIds.length ? {items: itemIds} : {})}); setQuote(q); write(COUPON_KEY, c); setCoupon(c); setPromoMsg({ok: true, text: `You save ${money(q.discount)}`}); } catch (e2) { setPromoMsg({ok: false, text: err(e2)}); } }}
+          onRemove={async () => { write(COUPON_KEY, ''); setCoupon(''); setPromoMsg(null); try { setQuote(await api<Quote>('quote/', 'POST', itemIds.length ? {items: itemIds} : {})); } catch {} }} message={promoMsg}/>
         <div className="co-help"><span className="co-help-icon"><Headphones size={22}/></span><div><strong>Need help with your order?</strong><p>We’re here to assist you.</p>
           {site.phone && <a href={`tel:+${site.phone.replace(/\D/g, '')}`}><Phone size={17}/> +{site.phone.replace(/\D/g, '')}</a>}
           {site.email && <a href={`mailto:${site.email}`}><Mail size={17}/> {site.email}</a>}</div></div>

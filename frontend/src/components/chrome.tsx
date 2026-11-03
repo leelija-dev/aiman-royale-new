@@ -27,7 +27,7 @@ export function Header({site}: {site: Site}) {
       <div className="header-actions">
         <Link href="/appointment" className="appointment-link"><CalendarDays size={15}/> Book Appointment</Link>
         <button aria-label="Search" className="icon" onClick={() => setSearch(!search)}><Search/></button>
-        <Link href="/account" className="icon hide-xs" aria-label="My account"><UserRound/></Link>
+        <Link href="/account?tab=profile" className="icon hide-xs" aria-label="My account"><UserRound/></Link>
         <Link href="/wishlist" className="icon count-icon" aria-label={`Wishlist, ${saved} saved`}><Heart/>{saved > 0 && <b className="count-badge wish">{badge(saved)}</b>}</Link>
         <Link href="/cart" className="icon count-icon" aria-label={`Shopping bag, ${count} items`}><ShoppingBag/>{count > 0 && <b className="count-badge">{badge(count)}</b>}</Link>
       </div>
@@ -67,7 +67,7 @@ function MainNav({items, open, close}: {items: MenuItem[]; open: boolean; close:
         </div>}
       </li>;
     })}</ul>
-    <div className="nav-mobile-extra"><Link href="/appointment" onClick={done}><CalendarDays size={18}/> Book Appointment</Link><Link href="/account" onClick={done}><UserRound size={18}/> My Account</Link></div>
+    <div className="nav-mobile-extra"><Link href="/appointment" onClick={done}><CalendarDays size={18}/> Book Appointment</Link><Link href="/account?tab=profile" onClick={done}><UserRound size={18}/> My Account</Link></div>
   </nav>;
 }
 

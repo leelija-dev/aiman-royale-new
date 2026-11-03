@@ -83,3 +83,28 @@ export function NotesCarousel({badge, image, notes}: {badge: string; image: stri
     </div>
   </section>;
 }
+
+/* ---------- Hero slider (slide 1 = hero section, more slides = its cards in admin) ---------- */
+export type HeroSlide = {eyebrow: string; title: string; subtitle: string; button: {label: string; href: string} | null; image: string};
+export function HeroSlider({slides}: {slides: HeroSlide[]}) {
+  const [i, setI] = useState(0), [paused, setPaused] = useState(false), n = slides.length;
+  useEffect(() => {
+    if (paused || n < 2 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const t = setInterval(() => setI(x => (x + 1) % n), 6000);
+    return () => clearInterval(t);
+  }, [paused, n]);
+  const lines = (t: string) => t.split('\n').flatMap((l, k) => k ? [<br key={k}/>, l] : [l]);
+  return <section className="luxury-hero hero-slider" aria-roledescription="carousel" aria-label="Featured collections"
+    onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}>
+    {slides.map((s, k) => <div key={k} className={`hero-slide${k === i ? ' on' : ''}`} aria-roledescription="slide" aria-label={`${k + 1} of ${n}`} aria-hidden={k !== i}>
+      <Image src={s.image} alt={s.title.replace(/\n/g, ' ') || 'Aiman Royale'} fill priority={k === 0} sizes="100vw" quality={85}/>
+      <div className="hero-copy">{s.eyebrow && <p className="eyebrow">{s.eyebrow}</p>}{k === 0 ? <h1>{lines(s.title)}</h1> : <h2 className="hero-h">{lines(s.title)}</h2>}
+        {s.subtitle && <p>{s.subtitle}</p>}{s.button && <Link className="button" href={s.button.href} tabIndex={k === i ? 0 : -1}>{s.button.label} <ArrowRight size={16}/></Link>}</div>
+    </div>)}
+    {n > 1 && <>
+      <button type="button" className="pc-arrow prev" aria-label="Previous slide" onClick={() => setI((i - 1 + n) % n)}><ChevronLeft size={22}/></button>
+      <button type="button" className="pc-arrow next" aria-label="Next slide" onClick={() => setI((i + 1) % n)}><ChevronRight size={22}/></button>
+      <div className="pc-dots">{slides.map((_, k) => <button key={k} type="button" aria-label={`Show slide ${k + 1}`} aria-current={k === i} className={k === i ? 'on' : ''} onClick={() => setI(k)}/>)}</div>
+    </>}
+  </section>;
+}

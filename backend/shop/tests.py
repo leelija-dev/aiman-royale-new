@@ -418,3 +418,40 @@ class DelhiveryTests(TestCase):
         from . import delhivery
         with patch('shop.delhivery.requests.request',return_value=FakeResponse({'detail':'no'},401)):
             with self.assertRaisesMessage(delhivery.DelhiveryError,'rejected the API token'):delhivery.pincode('700001')
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'],STORAGES={'default':{'BACKEND':'django.core.files.storage.FileSystemStorage'},'staticfiles':{'BACKEND':'django.contrib.staticfiles.storage.StaticFilesStorage'}})
+class ModificationTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.u=Customer.objects.create_user(username='c@example.com',email='c@example.com',password='Test-Password-910!')
+        self.admin=Customer.objects.create_superuser(username='a@example.com',email='a@example.com',password='Test-Password-910!')
+        self.p=Product.objects.create(name='Test Suit',slug='test-suit',price='1000.50',mrp='3000')
+        self.v1=Variant.objects.create(product=self.p,sku='T-M',size='M',colour='Pink',stock=5)
+        self.v2=Variant.objects.create(product=self.p,sku='T-L',size='L',colour='Pink',stock=5)
+        self.addr={'name':'Test Customer','phone':'+919000000001','email':'c@example.com','line1':'Test address','city':'Kolkata','state':'West Bengal','pincode':'700001'}
+    def test_admin_and_customer_logins_are_separate(self):
+        c=APIClient(enforce_csrf_checks=False)
+        c.post('/admin/login/?next=/admin/',{'username':'a@example.com','password':'Test-Password-910!'})
+        self.assertIn('admin_sessionid',c.cookies)
+        r=c.post('/api/auth/login/',{'email':'c@example.com','password':'Test-Password-910!'},format='json');self.assertEqual(r.status_code,200)
+        self.assertEqual(c.get('/api/auth/me/').data['user']['email'],'c@example.com')
+        self.assertEqual(c.get('/admin/').status_code,200)  # admin still signed in
+        c.post('/api/auth/logout/',{},format='json')
+        self.assertEqual(c.get('/admin/').status_code,200)
+    def test_buy_now_orders_only_that_item(self):
+        cart=Cart.objects.create(user=self.u);a=CartItem.objects.create(cart=cart,variant=self.v1,quantity=1);b=CartItem.objects.create(cart=cart,variant=self.v2,quantity=2)
+        c=APIClient();c.force_login(self.u)
+        self.assertEqual(Decimal(c.post('/api/quote/',{'items':[b.id]},format='json').data['subtotal']),Decimal('2001.00'))
+        o=reserve_order(self.u,cart,self.addr,uuid.uuid4(),method='cod',only=[b.id])[0]
+        self.assertEqual(o.subtotal,Decimal('2001.00'));self.assertEqual(list(cart.items.values_list('id',flat=True)),[a.id])
+    @override_settings(DELHIVERY_API_TOKEN='t',DELHIVERY_AUTO_SHIP=True,REDIS_URL='')
+    def test_cod_order_books_shipment_automatically(self):
+        cart=Cart.objects.create(user=self.u);CartItem.objects.create(cart=cart,variant=self.v1,quantity=1)
+        with patch('shop.services.start_shipment') as start, self.captureOnCommitCallbacks(execute=True):
+            o=reserve_order(self.u,cart,self.addr,uuid.uuid4(),method='cod')[0]
+        start.assert_called_once_with(o.pk)
+        from .services import ship_now
+        with patch('shop.delhivery.create_shipment',return_value='999') as create:
+            self.assertEqual(ship_now(o.pk),'999')
+        create.assert_called_once()

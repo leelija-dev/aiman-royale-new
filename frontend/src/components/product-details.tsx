@@ -61,12 +61,13 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
   }
 
   /** Puts the selection in the bag. Returns false (and shows why) if it could not. */
-  async function addToBag(buyNow = false): Promise<boolean> {
-    if (!variant || !variant.stock) { setPopup({ok: false, title: 'Please choose a size', detail: 'Select an available size before adding this style to your bag.'}); return false; }
+  /** Puts the selection in the bag. Returns the bag item id (or 0 and shows why) — Buy Now checks out just that item. */
+  async function addToBag(buyNow = false): Promise<number> {
+    if (!variant || !variant.stock) { setPopup({ok: false, title: 'Please choose a size', detail: 'Select an available size before adding this style to your bag.'}); return 0; }
     if (type === 'custom' && !mSaved) {
       setPopup({ok: false, title: 'Add your measurements', detail: 'You chose Custom Measurements. Enter and save your measurements below, or choose Stitched.'});
       measureRef.current?.scrollIntoView({behavior: 'smooth', block: 'center'});
-      return false;
+      return 0;
     }
     try {
       // Buy Now: if this exact size/colour is already in the bag, set its quantity instead of adding more.
@@ -74,10 +75,11 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
       if (existing && type !== 'custom') await api('cart/', 'PATCH', {id: existing.id, quantity: qty});
       else await api('cart/', 'POST', {variant: variant.id, quantity: qty, measurements: type === 'custom' ? m : {}});
       bagChanged();
-      return true;
+      const bag = await api<Bag>('cart/');
+      return bag.items.find(i => i.variant.id === variant.id)?.id || -1;
     } catch (e) {
       setPopup({ok: false, title: 'Could not add to bag', detail: err(e)});
-      return false;
+      return 0;
     }
   }
 
@@ -89,10 +91,12 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
 
   async function onBuyNow() {
     setBusy('buy');
-    if (await addToBag(true)) {
+    const id = await addToBag(true);
+    if (id) {
       const me = await api<{user: unknown}>('auth/me/').catch(() => ({user: null}));
+      const next = id > 0 ? `/checkout?item=${id}` : '/checkout';
       // Not signed in: sign in (or create an account) first, then come straight back to checkout.
-      router.push(me.user ? '/checkout' : `/login?next=${encodeURIComponent('/checkout')}`);
+      router.push(me.user ? next : `/login?next=${encodeURIComponent(next)}`);
       return;
     }
     setBusy('');
