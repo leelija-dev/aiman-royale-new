@@ -6,6 +6,7 @@ import {get} from '@/lib/server';
 import {Collection, ProductPage, Facets, Site, CategoryContent} from '@/lib/types';
 import {mainMenu, type MenuItem, type MenuLink} from '@/lib/menu';
 import {Filters, Results} from '@/components/collection-page';
+import {CategoryDetails} from '@/components/category-details';
 import {toParams, occasionImage, type Query} from '@/lib/query';
 
 type Props = {params: Promise<{slug: string}>; searchParams: Promise<Query>};
@@ -122,5 +123,6 @@ export default async function CollectionPage({params, searchParams}: Props) {
       <h2>A little guidance, before you choose.</h2>
       <div className="cp-accordion">{qa.map((x, i) => <details key={x.question}><summary><span className="cp-faq-icon">{FAQ_ICONS[i % 3]}</span>{x.question}</summary><p>{x.answer}</p></details>)}</div>
     </section>}
+    {t.details && <CategoryDetails html={t.details}/>}
   </div>;
 }

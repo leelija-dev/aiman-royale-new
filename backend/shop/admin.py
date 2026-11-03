@@ -14,7 +14,8 @@ class CollectionAdmin(admin.ModelAdmin):
     prepopulated_fields={'slug':('name',)};list_display=['name','parent','sort_order','active'];list_editable=['parent','sort_order','active'];list_filter=['parent'];inlines=[PageQuestionInline]
     fieldsets=((None,{'fields':('name','slug','parent','sort_order','description','image','active')}),
                ('SEO',{'fields':('seo_title','seo_description')}),
-               ('Category page text (leave blank to use the defaults in Site settings; {name} = collection name)',{'fields':('hero_eyebrow','hero_tagline','seo_heading','seo_body')}))
+               ('Category page text (leave blank to use the defaults in Site settings; {name} = collection name)',{'fields':('hero_eyebrow','hero_tagline','seo_heading','seo_body')}),
+               ('Category details (bottom of page, with Read more)',{'fields':('details',)}))
 @admin.register(PageQuestion)
 class PageQuestionAdmin(admin.ModelAdmin):
     list_display=['question','kind','collection','sort_order','active'];list_filter=['kind','collection','active'];list_editable=['sort_order','active'];search_fields=['question','answer']

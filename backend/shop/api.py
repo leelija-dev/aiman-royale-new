@@ -217,7 +217,7 @@ def category_content(c):
             'tagline':fill(c.hero_tagline or s.category_tagline),
             'seo_heading':fill(c.seo_heading or s.category_seo_heading),
             'seo_body':fill(c.seo_body or s.category_seo_body),
-            'faqs':entries('faq'),'guides':entries('guide'),
+            'faqs':entries('faq'),'guides':entries('guide'),'details':c.details,
             'fitting':{'title':s.fitting_title,'text':s.fitting_text,'button':s.fitting_button,
                        'steps':[x.strip() for x in s.fitting_steps.split('|') if x.strip()],'image':media_url(s.fitting_image)}}
 @api_view(['GET'])

@@ -992,3 +992,20 @@ footer.site-footer{display:block;padding:50px 5% 18px;background:linear-gradient
 @media(max-width:700px){.ac-page{padding:20px 4% 40px;gap:18px}.ac-nav{flex-direction:row;overflow-x:auto;gap:4px}.ac-nav button,.ac-nav a{white-space:nowrap;padding:10px 12px;font-size:14.5px}.ac-nav .ac-out{border:0;margin:0}.ac-form{grid-template-columns:1fr}.ac-track li{font-size:11.5px}.ac-order{padding:14px}.ac-main h2{font-size:24px}.wl-grid{grid-template-columns:1fr 1fr;gap:16px 12px}.wl-info h3{font-size:15px;min-height:0}.wl-btn{font-size:13px;padding:10px 8px}.wl-head{flex-direction:column;align-items:flex-start}}
 .cp-collection-link{display:flex;align-items:center;gap:8px;text-decoration:none!important}.cp-collection-link span{text-decoration:underline;text-underline-offset:4px;text-decoration-color:#c9b6a6}
 .cal-card{padding-bottom:16px}.cal-frame{width:100%;min-height:600px;border:0;border-radius:8px;background:#fce7f3;margin:10px 0 6px}
+
+/* ===== Category details with Read more ===== */
+.cd{padding-top:28px;padding-bottom:34px;border-top:1px solid var(--line)}
+.cd-text{position:relative;max-height:5.4em;overflow:hidden;font-size:16px;line-height:1.8;color:#5e4f48;transition:max-height .35s ease}
+.cd-text:after{content:'';position:absolute;left:0;right:0;bottom:0;height:2.2em;background:linear-gradient(transparent,#fbf8f3)}
+.cd-text.open{max-height:none}
+.cd-text.open:after{display:none}
+.cd-text h2,.cd-text h3,.cd-text h4{font-family:Georgia,serif;color:#2d2522;line-height:1.3;margin:18px 0 8px}
+.cd-text h2{font-size:24px}.cd-text h3{font-size:20px}.cd-text h4{font-size:17px}
+.cd-text>:first-child{margin-top:0}
+.cd-text p{margin:0 0 12px;color:inherit}
+.cd-text ul,.cd-text ol{margin:0 0 12px;padding-left:22px}
+.cd-text li{margin:4px 0}
+.cd-text a{color:var(--wine);text-decoration:underline}
+.cd-toggle{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:6px 0;margin-top:6px;font-size:16px;font-weight:600;color:#c2185b}
+.cd-toggle:hover{color:var(--wine)}
+.cd-toggle .flip{transform:rotate(180deg)}
