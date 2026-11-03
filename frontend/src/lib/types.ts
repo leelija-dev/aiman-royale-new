@@ -1,6 +1,6 @@
 import type {MenuItem} from './menu';
 export type QA={question:string;answer:string};
-export type CategoryContent={eyebrow:string;tagline:string;seo_heading:string;seo_body:string;faqs:QA[];guides:QA[];fitting:{title:string;text:string;button:string;steps:string[];image:string}};
+export type CategoryContent={eyebrow:string;tagline:string;seo_heading:string;seo_body:string;details?:string;faqs:QA[];guides:QA[];fitting:{title:string;text:string;button:string;steps:string[];image:string}};
 export type Collection={id:number;name:string;slug:string;description:string;image:string;seo_title:string;seo_description:string;content?:CategoryContent};
 export type Variant={id:number;sku:string;size:string;colour:string;stock:number};
 export type Product={id:number;name:string;slug:string;description:string;care:string;fabric:string;fit?:string;includes?:string;occasions:string[];price:string;mrp:string;featured:boolean;custom_fit:boolean;images:{id:number;url:string;alt:string}[];variants:Variant[];collections:Collection[];seo_title:string;seo_description:string;updated_at:string};

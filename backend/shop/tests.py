@@ -328,3 +328,38 @@ class EnvFileTests(TestCase):
                 self.assertEqual(os.environ['AR_TEST_KEEP'],'from-environment')
             finally:
                 for k in ['AR_TEST_ID','AR_TEST_SECRET','AR_TEST_MODE','AR_TEST_KEEP']:os.environ.pop(k,None)
+
+
+class CategoryDetailsTests(TestCase):
+    LONG='Delicately crafted with precision, these suits combine comfort and grace for every celebration. '*4
+    def page(self,block):
+        return f'''<html><head><script>var x=1</script></head><body><header><nav><a href="/collections/wedding">Wedding</a></nav></header>
+        <main><div class="grid">{''.join(f'<div class="card"><img src="/a{i}.jpg"><h3>Suit {i}</h3><span>₹11,760</span></div>' for i in range(6))}</div>
+        {block}</main><footer><p>Aiman Royale, Kolkata. Contact us any time for help with your order and sizing questions.</p></footer></body></html>'''
+    def test_import_teaser_plus_hidden_full_text(self):
+        from shop.management.commands.import_live_descriptions import extract
+        html=self.page(f'''<div class="seo"><p class="teaser">Shop Salwar Kameez Online What else to ask for...</p><a class="toggle">Read more</a>
+          <div class="full hidden"><h1>Shop Salwar Kameez &amp; Suit Online for Women</h1><p>{self.LONG}</p><ul><li>Anarkali</li><li>Palazzo</li></ul></div>
+          <button>Show less</button></div>''')
+        out=extract(html)
+        self.assertIn('<h2>Shop Salwar Kameez &amp; Suit Online for Women</h2>',out)
+        self.assertIn('<li>Anarkali</li>',out);self.assertNotIn('Read more',out);self.assertNotIn('Show less',out)
+        self.assertNotIn('₹',out);self.assertNotIn('Wedding',out);self.assertNotIn('What else to ask for...',out)
+    def test_import_single_clamped_block_with_button(self):
+        from shop.management.commands.import_live_descriptions import extract
+        out=extract(self.page(f'<section><div class="line-clamp-3"><img src="/banner.jpg" alt="Gown banner"><h2>Gowns</h2><p>{self.LONG}</p><figure><img src="/b.jpg"><figcaption>Photo caption</figcaption></figure></div><button>Read more</button></section>'))
+        self.assertNotIn('<img',out);self.assertNotIn('Photo caption',out);self.assertNotIn('banner',out)
+        self.assertTrue(out.startswith('<h2>Gowns</h2><p>Delicately'));self.assertNotIn('Read more',out)
+    def test_import_fallback_without_toggle(self):
+        from shop.management.commands.import_live_descriptions import extract
+        out=extract(self.page(f'<article><h2>Bridal</h2><p>{self.LONG}</p><p>Second paragraph about bridal wear and fittings.</p></article>'))
+        self.assertIn('Second paragraph',out);self.assertNotIn('Aiman Royale, Kolkata',out)
+    def test_cleaner_keeps_formatting_and_strips_unsafe_html(self):
+        from shop.richtext import clean_html
+        self.assertEqual(clean_html('<h1 style="x">Title</h1><p onclick="evil()">Hi <b>there</b><script>alert(1)</script></p><a href="javascript:x">bad</a>'),'<h2>Title</h2><p>Hi <b>there</b></p><a>bad</a>')
+        self.assertEqual(clean_html('First para.\n\nSecond\nline'),'<p>First para.</p><p>Second<br>line</p>')
+    def test_details_in_collection_api_and_cleaned_on_save(self):
+        from shop.models import Collection
+        Collection.objects.create(name='Gown',slug='gown-d',details='<p>Lovely <img src=x onerror=alert(1)>gowns</p>')
+        d=self.client.get('/api/collections/gown-d/').json()['content']['details']
+        self.assertEqual(d,'<p>Lovely gowns</p>')

@@ -74,6 +74,11 @@ class Collection(models.Model):
     hero_tagline=models.CharField('Banner tagline',max_length=160,blank=True)
     seo_heading=models.CharField('SEO section heading',max_length=160,blank=True)
     seo_body=models.TextField('SEO section text',blank=True)
+    details=models.TextField('Category details (bottom of page)',blank=True,help_text='Long description shown above "Join Our Inner Circle", collapsed to 3 lines with Read more. Headings, paragraphs, lists, bold and links are kept. Plain text works too (blank line = new paragraph).')
+    def save(self,*args,**kwargs):
+        from .richtext import clean_html
+        self.details=clean_html(self.details)
+        super().save(*args,**kwargs)
     def __str__(self):return self.name
 
 class PageQuestion(models.Model):
