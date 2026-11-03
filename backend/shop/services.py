@@ -153,18 +153,18 @@ def start_shipment(pk):
         try:ship_order.delay(str(pk));return
         except Exception:pass  # broker down: fall back to a background thread
     import threading
-    threading.Thread(target=ship_now,args=(pk,),daemon=True).start()
+    threading.Thread(target=_ship_in_thread,args=(pk,),daemon=True).start()
+
+def _ship_in_thread(pk):
+    from django.db import connection
+    try:ship_now(pk)
+    finally:connection.close()  # a thread gets its own DB connection; close it when done
 
 def ship_now(pk):
     """Create the Delhivery shipment for one order. A failure is shown on the order in admin."""
-    from django.db import close_old_connections
     from . import delhivery
-    close_old_connections()
-    try:
-        order=Order.objects.get(pk=pk)
-        if order.awb:return order.awb
-        try:return delhivery.create_shipment(order)
-        except delhivery.DelhiveryError as e:
-            Order.objects.filter(pk=pk,awb='').update(courier_status=('Booking failed: '+str(e))[:80])
-    finally:
-        close_old_connections()
+    order=Order.objects.get(pk=pk)
+    if order.awb:return order.awb
+    try:return delhivery.create_shipment(order)
+    except delhivery.DelhiveryError as e:
+        Order.objects.filter(pk=pk,awb='').update(courier_status=('Booking failed: '+str(e))[:80])

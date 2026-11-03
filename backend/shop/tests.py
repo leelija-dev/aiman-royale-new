@@ -452,6 +452,6 @@ class ModificationTests(TestCase):
             o=reserve_order(self.u,cart,self.addr,uuid.uuid4(),method='cod')[0]
         start.assert_called_once_with(o.pk)
         from .services import ship_now
-        with patch('shop.delhivery.create_shipment',return_value='999') as create, patch('shop.services.close_old_connections',create=True):
+        with patch('shop.delhivery.create_shipment',return_value='999') as create:
             self.assertEqual(ship_now(o.pk),'999')
         create.assert_called_once()
