@@ -223,7 +223,7 @@ def reserve_custom_order(user,req_id,address,key,method='cashfree'):
     existing=Order.objects.filter(idempotency_key=key,user=user).first()
     if existing:return existing,False
     if Order.objects.filter(idempotency_key=key).exists():raise ValidationError('Invalid checkout key.')
-    req=CustomRequest.objects.select_for_update().select_related('product','variant').filter(pk=req_id,user=user).first()
+    req=CustomRequest.objects.select_for_update(of=('self',)).select_related('product','variant').filter(pk=req_id,user=user).first()
     if not req or req.status!='accepted' or not req.price:raise ValidationError('This custom request is not ready for payment.')
     variant=req.variant or req.product.variants.first()
     if not variant:raise ValidationError('This product is not available.')
