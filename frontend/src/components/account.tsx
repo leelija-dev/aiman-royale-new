@@ -3,12 +3,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {useEffect, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
-import {Package, CalendarDays, UserRound, Heart, LogOut, MapPin, Check, CircleAlert, Truck, CreditCard, ArrowRight, X, ShoppingBag, FileDown, XCircle} from 'lucide-react';
+import {Package, CalendarDays, UserRound, Heart, LogOut, MapPin, Check, CircleAlert, Truck, CreditCard, ArrowRight, X, ShoppingBag, FileDown, XCircle, Copy, Ruler, CreditCard as Card} from 'lucide-react';
 import {api, bagChanged, err} from '@/lib/client';
 import {Order, Product, User, money, photo, discount} from '@/lib/types';
 import {useWishlist} from '@/lib/wishlist';
 
-type Appt = {id: string; starts_at: string; session_type: string; mode: string; status: string; occasion: string};
+type Appt = {id: string; starts_at: string | null; session_type: string; mode: string; status: string; occasion: string; source?: string; location?: string};
 type FullOrder = Order & {address: Record<string, string>; payment_method: string; items: (Order['items'][number] & {slug?: string; image?: string})[]};
 const STEPS = ['Placed', 'Confirmed', 'Shipped', 'Delivered'];
 const STEP_OF: Record<string, number> = {pending: 0, cod: 1, paid: 1, processing: 1, shipped: 2, delivered: 3};
@@ -22,6 +22,11 @@ function Tracker({status}: {status: string}) {
   const at = STEP_OF[status];
   return <ol className="ac-track" aria-label={`Order status: ${LABEL[status]}`}>{STEPS.map((s, i) =>
     <li key={s} className={i < at ? 'done' : i === at ? 'on' : ''}><span>{i <= at && (i < at || status === 'delivered') ? <Check size={13}/> : i + 1}</span>{s}</li>)}</ol>;
+}
+
+function CopyAwb({awb}: {awb: string}) {
+  const [done, setDone] = useState(false);
+  return <button type="button" className="ac-awb-copy" aria-label="Copy waybill number" onClick={async () => { try { await navigator.clipboard.writeText(awb); setDone(true); setTimeout(() => setDone(false), 1800); } catch {} }}>{done ? <Check size={15}/> : <Copy size={15}/>}</button>;
 }
 
 function OrderCard({o: initial}: {o: FullOrder}) {
@@ -46,10 +51,11 @@ function OrderCard({o: initial}: {o: FullOrder}) {
         <p><strong>{a.name}</strong><br/>{a.line1}{a.line2 ? `, ${a.line2}` : ''}<br/>{a.city}, {a.state} {a.pincode}<br/>{a.phone}</p>
         <h4><CreditCard size={16}/> Payment</h4><p>{o.payment_method === 'cod' ? 'Cash on Delivery' : 'Paid online (Cashfree)'}{o.pay_with ? ` · ${o.pay_with.toUpperCase()}` : ''}</p>
         {o.note && <><h4>Note</h4><p>“{o.note}”</p></>}
-        {['paid', 'cod', 'processing', 'shipped', 'delivered'].includes(o.status) && <><h4><Truck size={16}/> Shipment (Delhivery)</h4>
-          <p>{o.awb ? <>Waybill (AWB) <strong>{o.awb}</strong>{o.courier_status ? ` · ${o.courier_status}` : ''}</> : 'Waybill number will appear here once your parcel is booked with Delhivery.'}</p></>}
-        {o.awb && <>
-          {!!o.tracking_events?.length && <ol className="ac-scans">{o.tracking_events.slice(0, 4).map((e, k) => <li key={k}><strong>{e.status}</strong>{e.location && ` · ${e.location}`}<small>{e.time ? new Date(e.time).toLocaleString('en-IN', {dateStyle: 'medium', timeStyle: 'short'}) : ''}{e.detail && ` — ${e.detail}`}</small></li>)}</ol>}</>}</div>
+        {['paid', 'cod', 'processing', 'shipped', 'delivered'].includes(o.status) && <div className="ac-awb">
+          <span className="ac-awb-ico"><Truck size={18}/></span>
+          <div><small>Delhivery waybill (AWB)</small>{o.awb ? <strong>{o.awb}</strong> : <em>Assigned once your parcel is booked</em>}</div>
+          {o.awb && <CopyAwb awb={o.awb}/>}
+        </div>}</div>
     </div>
     <footer><div className="ac-totals"><span>Subtotal {money(o.subtotal)}</span>{Number(o.discount) > 0 && <span>Discount −{money(o.discount)}</span>}<span>Shipping {Number(o.shipping) ? money(o.shipping) : 'Free'}</span><strong>Total {money(o.total)}</strong></div>
       <div className="ac-actions">
@@ -111,7 +117,7 @@ function Profile({user, onSaved}: {user: User; onSaved: (u: User) => void}) {
 
 export function AccountPage({section}: {section?: 'orders'}) {
   const router = useRouter(), params = useSearchParams();
-  const tab = section || (['appointments', 'profile'].includes(params.get('tab') || '') ? params.get('tab')! : params.get('tab') === 'orders' ? 'orders' : 'profile');
+  const tab = section || (['appointments', 'profile', 'custom'].includes(params.get('tab') || '') ? params.get('tab')! : params.get('tab') === 'orders' ? 'orders' : 'profile');
   useEffect(() => { if (!section && params.get('tab') === 'orders') router.replace('/account/orders'); }, [section, params, router]);
   const [user, setUser] = useState<User | null>(null), [orders, setOrders] = useState<FullOrder[] | null>(null), [appts, setAppts] = useState<Appt[] | null>(null), [error, setError] = useState('');
   useEffect(() => {
@@ -126,7 +132,7 @@ export function AccountPage({section}: {section?: 'orders'}) {
   async function signOut() { try { await api('auth/logout/', 'POST', {}); bagChanged(); router.push('/'); router.refresh(); } catch (e) { setError(err(e)); } }
 
   if (!user) return <section className="ac-page"><p className="ac-loading">{error || 'Loading your account…'}</p></section>;
-  const tabs: [string, string, React.ReactNode, number?][] = [['profile', 'Profile Settings', <UserRound key="p" size={18}/>], ['orders', 'Order History', <Package key="o" size={18}/>, orders?.length], ['appointments', 'Appointments', <CalendarDays key="a" size={18}/>, appts?.length]];
+  const tabs: [string, string, React.ReactNode, number?][] = [['profile', 'Profile Settings', <UserRound key="p" size={18}/>], ['orders', 'Order History', <Package key="o" size={18}/>, orders?.length], ['appointments', 'Appointments', <CalendarDays key="a" size={18}/>, appts?.length], ['custom', 'Custom Requests', <Ruler key="c" size={18}/>]];
   return <section className="ac-page">
     <aside className="ac-side">
       <div className="ac-profile"><span className="ac-avatar">{initials(user)}</span>
@@ -143,7 +149,8 @@ export function AccountPage({section}: {section?: 'orders'}) {
         : orders.map(o => <OrderCard key={o.id} o={o}/>)}</>}
       {tab === 'appointments' && <><h2>Appointments</h2>{appts === null ? <p>Loading…</p> : !appts.length
         ? <div className="ac-empty"><CalendarDays size={34}/><p>No appointments yet.</p><Link href="/appointment" className="pd-btn pd-btn-bag">Book a fitting</Link></div>
-        : appts.map(a => <article key={a.id} className="ac-appt"><div><strong>{a.session_type === 'fitting' ? 'Fitting & Measurements' : 'Style Consultation'}</strong><small>{a.starts_at ? fmtDate(a.starts_at, true) : ''} · {a.mode === 'video' ? 'Video consultation' : 'At the studio'}{a.occasion ? ` · ${a.occasion}` : ''}</small></div><span className={`ac-pill ${a.status}`}>{a.status}</span></article>)}</>}
+        : appts.map(a => <article key={a.id} className="ac-appt"><div><strong>{a.session_type === 'fitting' ? 'Fitting & Measurements' : 'Style Consultation'}</strong><small>{a.starts_at ? fmtDate(a.starts_at, true) : 'Date & time in your Calendly confirmation email'} · {a.mode === 'video' ? 'Video consultation' : 'At the studio'}{a.occasion ? ` · ${a.occasion}` : ''}</small>{a.location && (/^https?:/.test(a.location) ? <a className="underlink" href={a.location} target="_blank" rel="noopener noreferrer">Join video call</a> : <small>{a.location}</small>)}</div><span className={`ac-pill ${a.status}`}>{a.status}</span></article>)}</>}
+      {tab === 'custom' && <><h2>Custom Requests</h2><CustomRequests/></>}
       {tab === 'profile' && <><h2>Profile Settings</h2><Profile user={user} onSaved={setUser}/></>}
     </div>
   </section>;
@@ -174,4 +181,35 @@ export function WishlistPage() {
       ? <div className="ac-empty"><Heart size={36}/><h2>Your wishlist is empty</h2><p>Tap the heart on any style to save it here.</p><Link className="pd-btn pd-btn-bag" href="/products">Explore styles</Link></div>
       : <div className="wl-grid">{items.map(p => <WishCard key={p.id} p={p} onGone={id => setItems(list => (list || []).filter(x => x.id !== id))}/>)}</div>}
   </section>;
+}
+
+
+/* ---------- Custom (made-to-measure) requests ---------- */
+type CustomReq = {id: number; ref: string; product: {name: string; slug: string; image: string; price: string}; size: string; colour: string;
+  measurements: Record<string, number | string>; quantity: number; note: string; status: string; price: string | null; total: string | null; admin_note: string; order: string; created_at: string};
+const CR_LABEL: Record<string, string> = {requested: 'Requested', accepted: 'Accepted', rejected: 'Not possible', cancelled: 'Cancelled', ordered: 'Ordered'};
+function CustomRequests() {
+  const [list, setList] = useState<CustomReq[] | null>(null), [busy, setBusy] = useState(0), [error, setError] = useState('');
+  useEffect(() => { api<CustomReq[]>('custom-requests/').then(setList).catch(e => setError(err(e))); }, []);
+  async function cancel(r: CustomReq) {
+    if (!window.confirm(`Cancel custom request #${r.ref}?`)) return;
+    setBusy(r.id);
+    try { const d = await api<CustomReq>(`custom-requests/${r.id}/cancel/`, 'POST', {}); setList(l => (l || []).map(x => x.id === r.id ? d : x)); } catch (e) { setError(err(e)); } finally { setBusy(0); }
+  }
+  if (error) return <p className="pd-err">{error}</p>;
+  if (list === null) return <p>Loading…</p>;
+  if (!list.length) return <div className="ac-empty"><Ruler size={34}/><p>No custom requests yet. Choose <strong>Custom Measurements</strong> on a product to request a made-to-measure outfit.</p><Link href="/products" className="pd-btn pd-btn-bag">Browse styles</Link></div>;
+  return <div className="cr-list">{list.map(r => { const u = String(r.measurements.unit || 'cm'); return <article key={r.id} className="cr-card">
+    <Link href={`/products/${r.product.slug}`} className="cr-img">{r.product.image && <Image src={r.product.image} alt={r.product.name} fill sizes="90px"/>}</Link>
+    <div className="cr-main"><h3><Link href={`/products/${r.product.slug}`}>{r.product.name}</Link></h3><p>Request ID: #{r.ref}{r.quantity > 1 ? ` · Qty ${r.quantity}` : ''}</p><small>{fmtDate(r.created_at, true)}</small></div>
+    <div className="cr-measure"><h4>Custom Measurements</h4><dl>{['bust', 'waist', 'hip', 'armhole'].map(k => <div key={k}><dt>{k[0].toUpperCase() + k.slice(1)}:</dt><dd>{r.measurements[k]}{u}</dd></div>)}</dl>
+      {r.colour && <p className="cr-colour">Colour: <strong>{r.colour}</strong></p>}</div>
+    <div className="cr-side"><span className={`cr-pill ${r.status}`}>{CR_LABEL[r.status] || r.status}</span>
+      {r.price && r.status !== 'rejected' && <p className="cr-price">{money(r.total || r.price)}<small>{r.quantity > 1 ? ` (${money(r.price)} each)` : ''}</small></p>}
+      {r.status === 'accepted' && <Link href={`/checkout?custom=${r.id}`} className="cr-pay"><Card size={16}/> Proceed to Payment</Link>}
+      {r.status === 'ordered' && <Link href="/account/orders" className="pd-btn-sm">View order</Link>}
+      {['requested', 'accepted'].includes(r.status) && <button type="button" className="cr-cancel" disabled={busy === r.id} onClick={() => cancel(r)}><X size={15}/> Cancel Request</button>}
+      {r.status === 'requested' && <small className="cr-hint">We’ll confirm the price by email.</small>}
+      {r.admin_note && <small className="cr-hint">“{r.admin_note}”</small>}</div>
+  </article>; })}</div>;
 }

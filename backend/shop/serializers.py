@@ -25,10 +25,13 @@ class AddressSerializer(serializers.Serializer):
     pincode=serializers.RegexField(r'^[1-9]\d{5}$')
     country=serializers.ChoiceField(choices=['IN'],default='IN')
 class AppointmentSerializer(serializers.ModelSerializer):
-    starts_at=serializers.DateTimeField(source='slot.starts_at',read_only=True)
+    starts_at=serializers.SerializerMethodField()
     slot=serializers.PrimaryKeyRelatedField(queryset=AppointmentSlot.objects.all())
+    def get_starts_at(self,a):
+        t=a.starts_at or (a.slot.starts_at if a.slot_id else None)
+        return t.isoformat() if t else None
     phone=serializers.RegexField(r'^\+?[1-9]\d{9,14}$')
-    class Meta:model=Appointment;fields=['id','slot','starts_at','name','phone','email','session_type','mode','occasion','notes','consent','status'];read_only_fields=['id','status']
+    class Meta:model=Appointment;fields=['id','slot','starts_at','name','phone','email','session_type','mode','occasion','notes','consent','status','source','location'];read_only_fields=['id','status','source','location']
     def validate_consent(self,value):
         if not value:raise serializers.ValidationError('Please consent to appointment-related contact.')
         return value

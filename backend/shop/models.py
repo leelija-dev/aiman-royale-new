@@ -266,9 +266,14 @@ class AppointmentSlot(models.Model):
 class Appointment(models.Model):
     id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
     user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True)
-    slot=models.ForeignKey(AppointmentSlot,on_delete=models.PROTECT,related_name='appointments')
+    slot=models.ForeignKey(AppointmentSlot,on_delete=models.PROTECT,related_name='appointments',null=True,blank=True,help_text='Empty for Calendly bookings')
+    starts_at=models.DateTimeField(null=True,blank=True,help_text='Calendly bookings: start time')
+    source=models.CharField(max_length=12,default='site',choices=[('site','Website slots'),('calendly','Calendly')])
+    calendly_event=models.URLField(max_length=300,blank=True)
+    calendly_invitee=models.URLField(max_length=300,blank=True,db_index=True)
+    location=models.CharField(max_length=300,blank=True,help_text='Studio address or video-call link')
     name=models.CharField(max_length=100)
-    phone=models.CharField(max_length=16)
+    phone=models.CharField(max_length=16,blank=True)
     email=models.EmailField(blank=True)
     session_type=models.CharField(max_length=32,choices=[('fitting','Fitting & Measurements'),('styling','Style Consultation')])
     mode=models.CharField(max_length=16,choices=[('studio','Visit the Studio'),('video','Video Consultation')])
@@ -296,8 +301,9 @@ class Subscriber(models.Model):
 class Page(models.Model):
     slug=models.SlugField(unique=True)
     title=models.CharField(max_length=150)
-    body=models.TextField(help_text='Plain text. HTML is escaped in the storefront.')
+    body=models.TextField(help_text='Plain text (blank line = new paragraph), or simple HTML: headings, paragraphs, lists, bold, links.')
     published=models.BooleanField(default=False)
+    updated_at=models.DateTimeField(auto_now=True,null=True)
     def __str__(self):return self.title
 
 
@@ -410,3 +416,27 @@ class ContactMessage(models.Model):
     handled=models.BooleanField(default=False)
     class Meta:ordering=['-created_at']
     def __str__(self):return f'{self.name} · {self.subject or self.message[:40]}'
+
+
+class CustomRequest(models.Model):
+    """A customer's made-to-measure request. Our team checks it, sets a price and accepts (or rejects) it;
+    the customer then pays from My Account → Custom Requests, which creates a normal order."""
+    STATUSES=[('requested','Requested'),('accepted','Accepted – awaiting payment'),('rejected','Not possible'),('cancelled','Cancelled by customer'),('ordered','Ordered')]
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='custom_requests')
+    product=models.ForeignKey(Product,on_delete=models.PROTECT,related_name='custom_requests')
+    variant=models.ForeignKey(Variant,on_delete=models.SET_NULL,null=True,blank=True,help_text='Colour (and size used as the base)')
+    colour=models.CharField(max_length=60,blank=True)
+    measurements=models.JSONField(default=dict,help_text='bust, waist, hip, armhole and unit (cm / in)')
+    quantity=models.PositiveIntegerField(default=1)
+    note=models.TextField('Customer note',blank=True,max_length=1000)
+    status=models.CharField(max_length=12,choices=STATUSES,default='requested')
+    price=models.DecimalField('Price per piece (₹)',max_digits=10,decimal_places=2,null=True,blank=True,help_text='Required to accept the request')
+    admin_note=models.CharField('Message to customer',max_length=300,blank=True)
+    order=models.OneToOneField(Order,on_delete=models.SET_NULL,null=True,blank=True,related_name='custom_request')
+    created_at=models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
+    class Meta:ordering=['-created_at'];verbose_name='Custom request'
+    def __str__(self):return f'#{self.pk:06d} · {self.product}'
+    def clean(self):
+        from django.core.exceptions import ValidationError as VE
+        if self.status=='accepted' and not self.price:raise VE({'price':'Set the price before accepting the request.'})

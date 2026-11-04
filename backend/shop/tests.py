@@ -506,3 +506,62 @@ class OrderCareTests(TestCase):
         ProductFAQ.objects.create(product=self.p,question='Is the dupatta included?',answer='Yes.')
         faqs=APIClient().get('/api/products/rani-suit/').data['faqs']
         self.assertEqual(faqs[0]['q'],'Is the dupatta included?');self.assertGreater(len(faqs),1)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'])
+class Nov4bTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.u=Customer.objects.create_user(username='n@example.com',email='n@example.com',password='Test-Password-910!',first_name='Nina')
+        self.p=Product.objects.create(name='Rani Suit',slug='rani-suit',price='5000',mrp='8000',custom_fit=True)
+        self.v=Variant.objects.create(product=self.p,sku='R-M',size='M',colour='Rani',stock=0)
+        self.c=APIClient();self.c.force_login(self.u)
+        self.addr={'name':'Nina','phone':'+919000000001','email':'n@example.com','line1':'Test address','city':'Kolkata','state':'West Bengal','pincode':'700001'}
+    def test_custom_request_flow(self):
+        from .models import CustomRequest
+        from django.core.exceptions import ValidationError as VE
+        m={'bust':41,'waist':78,'hip':74,'armhole':75,'unit':'cm'}
+        r=self.c.post('/api/custom-requests/',{'product':'rani-suit','variant':self.v.id,'measurements':m},format='json');self.assertEqual(r.status_code,201)
+        rid=r.data['id'];self.assertEqual(r.data['status'],'requested');self.assertEqual(r.data['colour'],'Rani')
+        self.assertEqual(self.c.post('/api/custom-requests/',{'product':'rani-suit','measurements':{'bust':1}},format='json').status_code,400)
+        req=CustomRequest.objects.get(pk=rid);req.status='accepted'
+        with self.assertRaises(VE):req.full_clean()  # price required to accept
+        req.price=Decimal('6500.40');req.save()
+        self.assertEqual(Decimal(self.c.post('/api/quote/',{'custom':rid},format='json').data['subtotal']),Decimal('6500.00'))
+        SiteSettings.objects.update_or_create(pk=1,defaults={'cod_enabled':True})
+        d=self.c.post('/api/checkout/',{'address':self.addr,'key':str(uuid.uuid4()),'method':'cod','custom':rid,'consent':True},format='json')
+        self.assertEqual(d.status_code,200,d.data);req.refresh_from_db();self.assertEqual(req.status,'ordered')
+        o=Order.objects.get(pk=req.order_id);self.assertEqual(o.total,Decimal('6500')+o.shipping);self.assertEqual(o.items.first().measurements['bust'],41)
+        self.v.refresh_from_db();self.assertEqual(self.v.stock,0)  # made to order: no stock used
+        # cancelling the order cancels the request and does not add stock
+        self.assertEqual(self.c.post(f'/api/orders/{o.id}/cancel/',{},format='json').status_code,200)
+        req.refresh_from_db();self.assertEqual(req.status,'cancelled');self.v.refresh_from_db();self.assertEqual(self.v.stock,0)
+    def test_unpaid_custom_order_reopens_request(self):
+        from .models import CustomRequest
+        req=CustomRequest.objects.create(user=self.u,product=self.p,variant=self.v,measurements={'bust':40,'waist':30,'hip':40,'armhole':16,'unit':'in'},status='accepted',price=7000)
+        from .services import reserve_custom_order
+        o,_=reserve_custom_order(self.u,req.pk,self.addr,uuid.uuid4(),'cashfree');release_order(o.pk)
+        req.refresh_from_db();self.assertEqual(req.status,'accepted');self.assertIsNone(req.order_id)
+    def test_calendly_booking_shows_in_account(self):
+        ev='https://api.calendly.com/scheduled_events/ABCDEF1234';inv=ev+'/invitees/XYZ98765'
+        self.assertEqual(self.c.post('/api/appointments/calendly/',{'event_uri':ev,'invitee_uri':inv,'session_type':'styling','mode':'video'},format='json').status_code,201)
+        self.c.post('/api/appointments/calendly/',{'event_uri':ev,'invitee_uri':inv},format='json')  # repeated message: no duplicate
+        a=self.c.get('/api/appointments/mine/').data;self.assertEqual(len(a),1);self.assertEqual(a[0]['source'],'calendly')
+        self.assertEqual(self.c.post('/api/appointments/calendly/',{'event_uri':'https://evil.example/x','invitee_uri':inv},format='json').status_code,400)
+    @override_settings(GOOGLE_CLIENT_ID='cid',GOOGLE_CLIENT_SECRET='sec',GOOGLE_REDIRECT_URI='http://localhost:3000/api/auth/google/callback/')
+    def test_google_sign_in(self):
+        c=APIClient()
+        r=c.get('/api/auth/google/',{'next':'/checkout?variant=5'});self.assertEqual(r.status_code,302);self.assertIn('accounts.google.com',r['Location'])
+        state=c.session['google_state']
+        tok=FakeResponse({'access_token':'at'});info=FakeResponse({'email':'New.Person@Example.com','email_verified':True,'given_name':'New','family_name':'Person'})
+        tok.raise_for_status=info.raise_for_status=lambda:None
+        with patch('requests.post',return_value=tok),patch('requests.get',return_value=info):
+            r=c.get('/api/auth/google/callback/',{'code':'abc','state':state})
+        self.assertEqual(r.status_code,302);self.assertEqual(r['Location'],'/checkout?variant=5')
+        self.assertEqual(c.get('/api/auth/me/').data['user']['email'],'new.person@example.com')
+        r=c.get('/api/auth/google/callback/',{'code':'abc','state':'wrong'});self.assertIn('error=google-expired',r['Location'])
+    def test_policy_page_html(self):
+        from .models import Page
+        Page.objects.create(slug='privacy',title='Privacy Policy',body='<h2>Data</h2><p>We keep it safe.</p><script>alert(1)</script>',published=True)
+        d=APIClient().get('/api/pages/privacy/').data
+        self.assertIn('<h2>Data</h2>',d['html']);self.assertNotIn('script',d['html'])

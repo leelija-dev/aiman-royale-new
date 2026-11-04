@@ -40,7 +40,8 @@ function MainNav({items, open, close}: {items: MenuItem[]; open: boolean; close:
   const path = usePathname();
   const [active, setActive] = useState<number | null>(null), [tab, setTab] = useState(0), [mobileItem, setMobileItem] = useState<number | null>(null);
   useEffect(() => { setActive(null); close(); }, [path]); // eslint-disable-line react-hooks/exhaustive-deps
-  const show = (i: number) => { setActive(i); setTab(0); };
+  // Only reset to the first tab when opening a different menu (focus moving inside the open menu must not switch tabs).
+  const show = (i: number) => { if (active !== i) { setActive(i); setTab(0); } };
   const done = () => { setActive(null); close(); };
   return <nav className={open ? 'nav open' : 'nav'} aria-label="Main" onMouseLeave={() => setActive(null)}>
     <ul className="menu-bar">{items.map((item, i) => {
