@@ -7,6 +7,7 @@ from django.contrib.auth.hashers import make_password,check_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
+from rest_framework.exceptions import NotFound
 from django.db import transaction,IntegrityError
 from django.db.models import Q,Count,Min,Max,Avg
 from django.utils.text import slugify
@@ -183,7 +184,12 @@ def home(request):
 @api_view(['GET'])
 def products(request,slug=None):
     q=Product.objects.filter(active=True).prefetch_related('images','variants','collections','occasions')
-    if slug:return Response(ProductSerializer(get_object_or_404(q,slug=slug)).data)
+    if slug:
+        prod=get_object_or_404(q,slug=slug);data=ProductSerializer(prod).data
+        # Product FAQs: this product's own questions first, then the ones shared by all products.
+        faqs=ProductFAQ.objects.filter(active=True).filter(Q(product=prod)|Q(product__isnull=True)).order_by(F('product').asc(nulls_last=True),'sort_order','id')
+        data['faqs']=[{'q':f.question,'a':f.answer} for f in faqs]
+        return Response(data)
     p=request.query_params
     cols=[v for v in p.getlist('collection') if v]
     if cols:q=q.filter(collections__slug__in=cols)
@@ -271,12 +277,12 @@ def change_password(request):
 def coupons(request):
     """Coupons for the Saving Zone, with what each would save on the current bag."""
     items=list(get_cart(request).items.select_related('variant__product'))
-    subtotal=sum((i.variant.product.price*i.quantity for i in items),Decimal('0'))
+    subtotal=sum((rupees(i.variant.product.price)*i.quantity for i in items),Decimal('0'))
     now=timezone.now();out=[]
     for c in Coupon.objects.filter(active=True,public=True).filter(Q(expires_at__isnull=True)|Q(expires_at__gt=now)).order_by('-percent','minimum'):
         ok=bool(items) and subtotal>=c.minimum
         out.append({'code':c.code,'percent':c.percent,'minimum':c.minimum,'description':c.description,'expires_at':c.expires_at,
-                    'eligible':ok,'saving':money(subtotal*Decimal(c.percent)/100) if ok else Decimal('0'),'short_by':max(Decimal('0'),c.minimum-subtotal)})
+                    'eligible':ok,'saving':rupees(subtotal*Decimal(c.percent)/100) if ok else Decimal('0'),'short_by':max(Decimal('0'),c.minimum-subtotal)})
     return Response(out)
 @api_view(['POST'])
 @throttle_classes([AuthThrottle])
@@ -478,3 +484,82 @@ def delivery_pincode(request,pin):
     try:info=delhivery.pincode(pin)
     except delhivery.DelhiveryError:return Response({'checked':False,'serviceable':True,'cod':True,'prepaid':True,'city':'','state':''})
     return Response({'checked':True,**info})
+
+
+# ---------- Orders: cancel, invoice, tracking ----------
+def own_order(request,ref):
+    """Customer's own order by full id or the 8-character reference shown on the site."""
+    ref=str(ref).strip().lstrip('#').lower()
+    q=Order.objects.filter(user=request.user)
+    try:return q.get(pk=uuid.UUID(ref))
+    except (ValueError,Order.DoesNotExist):pass
+    if re.fullmatch(r'[0-9a-f]{8}',ref):
+        found=[o for o in q.only('id') if str(o.id).startswith(ref)]
+        if len(found)==1:return q.get(pk=found[0].pk)
+    raise NotFound('Order not found in your account.')
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def order_cancel(request,ref):
+    o=own_order(request,ref)
+    o=cancel_order(o.pk,request.user,str(request.data.get('reason','') or '').strip())
+    return Response(OrderSerializer(o).data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def order_invoice(request,ref):
+    from django.http import HttpResponse
+    from . import invoice
+    o=own_order(request,ref)
+    if o.status in ('pending','expired'):raise ValidationError('The invoice is available once the order is confirmed.')
+    r=HttpResponse(invoice.render(o),content_type='application/pdf')
+    r['Content-Disposition']=f'attachment; filename="Invoice-{invoice.number(o)}.pdf"'
+    return r
+
+STAGES=['Confirmed','Packed','Shipped','Out For Delivery','Delivered']
+def stage(o):
+    cs=(o.courier_status or '').lower()
+    if o.status=='delivered' or cs=='delivered':return 4
+    if 'out for delivery' in cs or 'dispatched' in cs:return 3
+    if o.status=='shipped' or 'transit' in cs or 'picked' in cs or 'reached' in cs:return 2
+    if o.awb:return 1
+    return 0 if o.status in ('paid','cod','processing') else -1
+
+@api_view(['GET'])
+def track(request):
+    """Tracking for one order: ?order=<ref> (signed in, own order) or ?awb=<waybill of an Aiman Royale order>."""
+    from . import delhivery
+    awb=str(request.query_params.get('awb','')).strip();ref=str(request.query_params.get('order','')).strip()
+    if awb:
+        o=Order.objects.filter(awb=awb).first()
+        if not o:raise NotFound('No Aiman Royale shipment found with this waybill number.')
+    elif ref:
+        if not request.user.is_authenticated:return Response({'error':'Please sign in to track by order ID, or use the waybill number.'},status=401)
+        o=own_order(request,ref)
+    else:raise ValidationError('Enter an order ID or a waybill number.')
+    # Refresh from Delhivery at most every 30 seconds.
+    if o.awb and delhivery.configured() and o.status not in ('delivered','cancelled','refunded') and (not o.tracking_synced_at or (timezone.now()-o.tracking_synced_at).total_seconds()>30):
+        try:delhivery.track(o);o.refresh_from_db()
+        except delhivery.DelhiveryError:pass
+    mine=request.user.is_authenticated and o.user_id==request.user.id
+    a=o.address or {}
+    return Response({'order':str(o.id)[:8].upper() if mine else '','awb':o.awb,'status':o.status,'courier_status':o.courier_status or ('Cancelled' if o.status in ('cancelled','refunded') else ''),
+                     'destination':', '.join(x for x in [a.get('city',''),a.get('state','')] if x),'stage':stage(o),'stages':STAGES,
+                     'events':o.tracking_events or [],'updated':o.tracking_synced_at,'cancelled':o.status in ('cancelled','refunded','refund_required') and bool(o.cancelled_at)})
+
+# ---------- Contact form and coupon check ----------
+@api_view(['POST'])
+@throttle_classes([AuthThrottle])
+def contact(request):
+    d=request.data;name=str(d.get('name','')).strip()[:100];email=str(d.get('email','')).strip()[:254];msg=str(d.get('message','')).strip()
+    validate_email(email)
+    if not name or len(msg)<10:raise ValidationError('Please enter your name and a message of at least 10 characters.')
+    ContactMessage.objects.create(name=name,email=email,phone=str(d.get('phone','')).strip()[:20],subject=str(d.get('subject','')).strip()[:150],message=msg[:3000])
+    return Response({'message':'Thank you! Our team will get back to you shortly.'},status=201)
+
+@api_view(['GET'])
+def coupon_check(request):
+    code=str(request.query_params.get('code','')).strip().upper()
+    c=Coupon.objects.filter(code=code,active=True).filter(Q(expires_at__isnull=True)|Q(expires_at__gt=timezone.now())).first()
+    if not c:return Response({'valid':False,'message':'This coupon code is not valid or has expired.'})
+    return Response({'valid':True,'code':c.code,'percent':c.percent,'minimum':c.minimum,'description':c.description})

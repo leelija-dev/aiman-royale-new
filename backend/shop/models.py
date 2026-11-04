@@ -11,6 +11,7 @@ class Customer(AbstractUser):
 
 class SiteSettings(models.Model):
     name=models.CharField(max_length=80,default='Aiman Royale')
+    gstin=models.CharField('GSTIN (printed on invoices)',max_length=20,blank=True)
     announcement=models.CharField(max_length=180,default='New Arrivals Just In | Enjoy Up to 70% OFF')
     hero_title=models.CharField(max_length=180,default='Shop Luxury\nCrafted For You')
     hero_description=models.CharField(max_length=240,default='Designer ethnic wear for every celebration. Find your style, make it yours.')
@@ -228,6 +229,9 @@ class Order(models.Model):
     courier_status=models.CharField(max_length=80,blank=True)
     tracking_events=models.JSONField(default=list,blank=True)
     tracking_synced_at=models.DateTimeField(null=True,blank=True)
+    pickup_requested_at=models.DateTimeField(null=True,blank=True,help_text='Set when a Delhivery pickup is requested. Customers cannot cancel after this.')
+    cancelled_at=models.DateTimeField(null=True,blank=True)
+    cancel_reason=models.CharField(max_length=200,blank=True)
     class Meta:ordering=['-created_at']
 
 class OrderItem(models.Model):
@@ -383,3 +387,26 @@ class InstagramPost(models.Model):
     active=models.BooleanField(default=True)
     class Meta:ordering=['sort_order','id']
     def __str__(self):return self.caption or f'Post {self.pk}'
+
+
+class ProductFAQ(models.Model):
+    """Question and answer on the product page. Leave 'product' empty to show it on every product."""
+    product=models.ForeignKey(Product,on_delete=models.CASCADE,null=True,blank=True,related_name='faqs',help_text='Empty = shown on all products')
+    question=models.CharField(max_length=250)
+    answer=models.TextField()
+    sort_order=models.PositiveIntegerField(default=0)
+    active=models.BooleanField(default=True)
+    class Meta:ordering=['sort_order','id'];verbose_name='Product FAQ'
+    def __str__(self):return self.question
+
+class ContactMessage(models.Model):
+    """Message sent from the Contact Us page."""
+    name=models.CharField(max_length=100)
+    email=models.EmailField()
+    phone=models.CharField(max_length=20,blank=True)
+    subject=models.CharField(max_length=150,blank=True)
+    message=models.TextField(max_length=3000)
+    created_at=models.DateTimeField(auto_now_add=True)
+    handled=models.BooleanField(default=False)
+    class Meta:ordering=['-created_at']
+    def __str__(self):return f'{self.name} · {self.subject or self.message[:40]}'
