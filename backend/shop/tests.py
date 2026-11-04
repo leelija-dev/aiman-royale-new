@@ -442,9 +442,9 @@ class ModificationTests(TestCase):
     def test_buy_now_orders_only_that_item(self):
         cart=Cart.objects.create(user=self.u);a=CartItem.objects.create(cart=cart,variant=self.v1,quantity=1);b=CartItem.objects.create(cart=cart,variant=self.v2,quantity=2)
         c=APIClient();c.force_login(self.u)
-        self.assertEqual(Decimal(c.post('/api/quote/',{'items':[b.id]},format='json').data['subtotal']),Decimal('2001.00'))
+        self.assertEqual(Decimal(c.post('/api/quote/',{'items':[b.id]},format='json').data['subtotal']),Decimal('2002.00'))
         o=reserve_order(self.u,cart,self.addr,uuid.uuid4(),method='cod',only=[b.id])[0]
-        self.assertEqual(o.subtotal,Decimal('2001.00'));self.assertEqual(list(cart.items.values_list('id',flat=True)),[a.id])
+        self.assertEqual(o.subtotal,Decimal('2002.00'));self.assertEqual(list(cart.items.values_list('id',flat=True)),[a.id])
     @override_settings(DELHIVERY_API_TOKEN='t',DELHIVERY_AUTO_SHIP=True,REDIS_URL='')
     def test_cod_order_books_shipment_automatically(self):
         cart=Cart.objects.create(user=self.u);CartItem.objects.create(cart=cart,variant=self.v1,quantity=1)
@@ -455,3 +455,54 @@ class ModificationTests(TestCase):
         with patch('shop.delhivery.create_shipment',return_value='999') as create:
             self.assertEqual(ship_now(o.pk),'999')
         create.assert_called_once()
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'])
+class OrderCareTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.u=Customer.objects.create_user(username='o@example.com',email='o@example.com',password='Test-Password-910!')
+        self.p=Product.objects.create(name='Rani Suit',slug='rani-suit',price='13419.39',mrp='20000')
+        self.v=Variant.objects.create(product=self.p,sku='R-M',size='M',colour='Rani',stock=4)
+        cart=Cart.objects.create(user=self.u);CartItem.objects.create(cart=cart,variant=self.v,quantity=1)
+        self.addr={'name':'Test Customer','phone':'+919000000001','email':'o@example.com','line1':'Test address','city':'Kolkata','state':'West Bengal','pincode':'700001'}
+        self.o=reserve_order(self.u,cart,self.addr,uuid.uuid4(),method='cod')[0]
+        self.c=APIClient();self.c.force_login(self.u)
+    def test_amounts_are_whole_rupees(self):
+        self.assertEqual(self.o.subtotal,Decimal('13419'));self.assertEqual(self.o.total,self.o.total.to_integral_value())
+        self.assertEqual(self.o.items.first().unit_price,Decimal('13419'))
+    def test_cancel_before_pickup_restocks(self):
+        ref=str(self.o.id)[:8]
+        self.assertTrue(self.c.get('/api/orders/').data[0]['can_cancel'])
+        r=self.c.post(f'/api/orders/{ref}/cancel/',{'reason':'Ordered by mistake'},format='json');self.assertEqual(r.status_code,200)
+        self.o.refresh_from_db();self.assertEqual(self.o.status,'cancelled');self.v.refresh_from_db();self.assertEqual(self.v.stock,4)
+        self.assertEqual(self.c.post(f'/api/orders/{ref}/cancel/',{},format='json').status_code,400)
+    def test_no_cancel_after_pickup_request(self):
+        Order.objects.filter(pk=self.o.pk).update(pickup_requested_at=timezone.now())
+        self.assertEqual(self.c.post(f'/api/orders/{self.o.id}/cancel/',{},format='json').status_code,400)
+    def test_other_customer_cannot_touch_order(self):
+        other=Customer.objects.create_user(username='x@example.com',email='x@example.com',password='Test-Password-910!')
+        c=APIClient();c.force_login(other)
+        self.assertEqual(c.post(f'/api/orders/{self.o.id}/cancel/',{},format='json').status_code,404)
+        self.assertEqual(c.get(f'/api/orders/{self.o.id}/invoice/').status_code,404)
+    def test_invoice_pdf(self):
+        r=self.c.get(f'/api/orders/{str(self.o.id)[:8]}/invoice/')
+        self.assertEqual(r.status_code,200);self.assertEqual(r['Content-Type'],'application/pdf');self.assertTrue(r.content.startswith(b'%PDF'))
+    def test_tracking_by_order_and_awb(self):
+        Order.objects.filter(pk=self.o.pk).update(awb='12345',courier_status='In Transit',status='shipped',tracking_events=[{'time':'2026-11-04T10:00:00','status':'In Transit','detail':'Bag received','location':'Kolkata'}])
+        d=self.c.get('/api/track/',{'order':str(self.o.id)[:8]}).data
+        self.assertEqual(d['awb'],'12345');self.assertEqual(d['stage'],2);self.assertEqual(len(d['events']),1)
+        anon=APIClient()
+        self.assertEqual(anon.get('/api/track/',{'awb':'12345'}).data['order'],'')  # no order id leaked
+        self.assertEqual(anon.get('/api/track/',{'awb':'999'}).status_code,404)
+        self.assertEqual(anon.get('/api/track/',{'order':str(self.o.id)[:8]}).status_code,401)
+    def test_contact_and_coupon_check_and_faqs(self):
+        from .models import ContactMessage,ProductFAQ,Coupon
+        self.assertEqual(APIClient().post('/api/contact/',{'name':'A','email':'a@example.com','message':'Hello, I need help with sizing.'},format='json').status_code,201)
+        self.assertEqual(ContactMessage.objects.count(),1)
+        Coupon.objects.create(code='FEST10',percent=10)
+        self.assertTrue(APIClient().get('/api/coupons/check/',{'code':'fest10'}).data['valid'])
+        self.assertFalse(APIClient().get('/api/coupons/check/',{'code':'NOPE'}).data['valid'])
+        ProductFAQ.objects.create(product=self.p,question='Is the dupatta included?',answer='Yes.')
+        faqs=APIClient().get('/api/products/rani-suit/').data['faqs']
+        self.assertEqual(faqs[0]['q'],'Is the dupatta included?');self.assertGreater(len(faqs),1)

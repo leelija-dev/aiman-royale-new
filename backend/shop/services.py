@@ -75,15 +75,19 @@ def verify_cashfree(order):
     raise ValidationError('No matching successful Cashfree payment was found. Please contact the studio if charged.')
 
 def money(value):return Decimal(value).quantize(Decimal('.01'))
+def rupees(value):
+    """Whole rupees (₹13,419.39 → ₹13,419). Every amount shown and charged is a whole number."""
+    from decimal import ROUND_HALF_UP
+    return Decimal(value).quantize(Decimal('1'),rounding=ROUND_HALF_UP)
 def totals(items,code=''):
-    subtotal=money(sum((i.variant.product.price*i.quantity for i in items),Decimal('0')))
+    subtotal=money(sum((rupees(i.variant.product.price)*i.quantity for i in items),Decimal('0')))
     discount=Decimal('0')
     if code:
         c=Coupon.objects.filter(code=code.strip().upper(),active=True).first()
         if not c or (c.expires_at and c.expires_at<=timezone.now()) or subtotal<c.minimum:raise ValidationError('Coupon is invalid, expired or the minimum order value has not been met.')
-        discount=money(subtotal*Decimal(c.percent)/100)
+        discount=money(rupees(subtotal*Decimal(c.percent)/100))
     s=SiteSettings.current()
-    shipping=Decimal('0') if subtotal-discount>=s.free_shipping_above else s.shipping_fee
+    shipping=Decimal('0') if subtotal-discount>=s.free_shipping_above else money(rupees(s.shipping_fee))
     return {'subtotal':subtotal,'discount':discount,'shipping':shipping,'total':money(subtotal-discount+shipping)}
 
 @transaction.atomic
@@ -106,7 +110,7 @@ def reserve_order(user,cart,address,key,code='',method='cashfree',only=None):
     order=Order.objects.create(user=user,idempotency_key=key,address=address,payment_method=method,status='cod' if method=='cod' else 'pending',expires_at=timezone.now()+timedelta(minutes=30),**amounts)
     for item in items:
         Variant.objects.filter(pk=item.variant_id).update(stock=F('stock')-item.quantity)
-        OrderItem.objects.create(order=order,variant=item.variant,name=item.variant.product.name,unit_price=item.variant.product.price,quantity=item.quantity,measurements=item.measurements)
+        OrderItem.objects.create(order=order,variant=item.variant,name=item.variant.product.name,unit_price=rupees(item.variant.product.price),quantity=item.quantity,measurements=item.measurements)
     cart.items.filter(pk__in=[i.pk for i in items]).delete()
     if order.status=='cod':schedule_shipment(order)
     return order,True
@@ -168,3 +172,33 @@ def ship_now(pk):
     try:return delhivery.create_shipment(order)
     except delhivery.DelhiveryError as e:
         Order.objects.filter(pk=pk,awb='').update(courier_status=('Booking failed: '+str(e))[:80])
+
+
+# ---------- Customer cancellation ----------
+NOT_PICKED={'','manifested','not picked','pending','open','cancelled'}
+def can_cancel(order):
+    """Customers may cancel until Delhivery collects the parcel (or a pickup has been requested)."""
+    cs=(order.courier_status or '').strip().lower()
+    return order.status in ('paid','cod','processing') and not order.pickup_requested_at and (cs in NOT_PICKED or cs.startswith('booking failed'))
+
+def cancel_order(order_id,user,reason=''):
+    from . import delhivery
+    with transaction.atomic():
+        order=Order.objects.select_for_update().get(pk=order_id,user=user)
+        if not can_cancel(order):raise ValidationError('This order can no longer be cancelled because it has been handed to the courier. Please contact us for help.')
+        if order.awb and order.courier_status!='Cancelled' and delhivery.configured():
+            try:delhivery.cancel(order)
+            except delhivery.DelhiveryError:raise ValidationError('We could not cancel the courier booking right now. Please try again in a few minutes or contact us.')
+        for item in order.items.all():Variant.objects.filter(pk=item.variant_id).update(stock=F('stock')+item.quantity)
+        order.cancelled_at=timezone.now();order.cancel_reason=reason[:200]
+        if order.payment_method=='cod' or not order.gateway_payment_id:
+            order.status='cancelled'
+        else:
+            # Paid online: ask Cashfree to refund in full; if that fails our team refunds manually.
+            try:
+                gateway('POST',f'orders/{order.gateway_order_id}/refunds',{'refund_amount':float(order.total),'refund_id':f'cancel-{str(order.id)[:8]}','refund_note':'Order cancelled by customer'},idempotency_key=f'refund-{order.id}')
+                order.status='refunded'
+            except ProviderUnavailable:
+                order.status='refund_required'
+        order.save(update_fields=['status','cancelled_at','cancel_reason'])
+    return order

@@ -66,6 +66,7 @@ REST_FRAMEWORK={'DEFAULT_AUTHENTICATION_CLASSES':['rest_framework.authentication
 CSRF_TRUSTED_ORIGINS=os.getenv('CSRF_TRUSTED_ORIGINS','http://localhost:3000,http://localhost:8080').split(',')
 SESSION_COOKIE_HTTPONLY=True
 ADMIN_SESSION_COOKIE_NAME='admin_sessionid'  # admin login is kept separate from the customer login
+CSRF_USE_SESSIONS=True  # CSRF token lives in each session, so the admin and shop logins never clash
 SESSION_COOKIE_SAMESITE='Lax'
 CSRF_COOKIE_SAMESITE='Lax'
 SESSION_COOKIE_SECURE=not DEBUG

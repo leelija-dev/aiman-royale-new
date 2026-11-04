@@ -4,9 +4,11 @@ from .models import *
 admin.site.site_header='Aiman Royale · Store Management'
 class ImageInline(admin.TabularInline):model=ProductImage;extra=1
 class VariantInline(admin.TabularInline):model=Variant;extra=1
+class ProductFAQInline(admin.TabularInline):
+    model=ProductFAQ;extra=1;fields=['question','answer','sort_order','active'];verbose_name_plural='FAQs for this product (shown above the questions shared by all products)'
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display=['name','price','active','featured'];list_filter=['active','featured','collections','occasions'];search_fields=['name','slug'];prepopulated_fields={'slug':('name',)};filter_horizontal=['collections','occasions'];inlines=[ImageInline,VariantInline]
+    list_display=['name','price','active','featured'];list_filter=['active','featured','collections','occasions'];search_fields=['name','slug'];prepopulated_fields={'slug':('name',)};filter_horizontal=['collections','occasions'];inlines=[ImageInline,VariantInline,ProductFAQInline]
 class PageQuestionInline(admin.TabularInline):
     model=PageQuestion;extra=1;fields=['kind','question','answer','sort_order','active'];verbose_name_plural='FAQs & guide entries for this category (leave empty to use the defaults)'
 @admin.register(Collection)
@@ -29,9 +31,15 @@ class ItemInline(admin.TabularInline):
 class OrderAdmin(admin.ModelAdmin):
     list_filter=['status','courier_status'];inlines=[ItemInline]
     list_display=['id','user','status','total','awb','courier_status','created_at'];search_fields=['id','user__email','gateway_payment_id','awb']
-    readonly_fields=['id','user','idempotency_key','status','note','pay_with','subtotal','discount','shipping','total','address','payment_method','gateway_order_id','payment_session_id','gateway_payment_id','created_at','expires_at','courier_status','tracking_view','tracking_synced_at']
+    readonly_fields=['id','user','idempotency_key','status','cancelled_at','cancel_reason','note','pay_with','subtotal','discount','shipping','total','address','payment_method','gateway_order_id','payment_session_id','gateway_payment_id','created_at','expires_at','courier_status','tracking_view','tracking_synced_at']
     exclude=['tracking_events']
-    actions=['mark_processing','mark_shipped','mark_delivered','delhivery_create','delhivery_track','delhivery_slip','delhivery_pickup','delhivery_cancel']
+    actions=['download_invoice','mark_processing','mark_shipped','mark_delivered','delhivery_create','delhivery_track','delhivery_slip','delhivery_pickup','delhivery_cancel']
+    @admin.action(description='Download invoice (PDF, first selected order)')
+    def download_invoice(self,request,q):
+        from django.http import HttpResponse
+        from . import invoice
+        o=q.first()
+        r=HttpResponse(invoice.render(o),content_type='application/pdf');r['Content-Disposition']=f'attachment; filename="Invoice-{invoice.number(o)}.pdf"';return r
     @admin.display(description='Tracking history')
     def tracking_view(self,o):
         from django.utils.html import format_html_join
@@ -71,7 +79,11 @@ class OrderAdmin(admin.ModelAdmin):
         from . import delhivery
         n=q.exclude(awb='').count()
         if not n:return self.message_user(request,'None of the selected orders has an AWB yet.',messages.WARNING)
-        try:delhivery.request_pickup(n);self.message_user(request,f'Pickup requested for {n} parcel(s).',messages.SUCCESS)
+        try:
+            delhivery.request_pickup(n)
+            from django.utils import timezone
+            q.exclude(awb='').update(pickup_requested_at=timezone.now())
+            self.message_user(request,f'Pickup requested for {n} parcel(s). Customers can no longer cancel these orders.',messages.SUCCESS)
         except delhivery.DelhiveryError as e:self.message_user(request,str(e),messages.ERROR)
     @admin.action(description='Delhivery: cancel shipment')
     def delhivery_cancel(self,request,q):
@@ -91,7 +103,7 @@ class AppointmentAdmin(admin.ModelAdmin):
 @admin.register(SiteSettings)
 class SettingsAdmin(admin.ModelAdmin):
     fieldsets=((None,{'fields':('name','announcement','hero_title','hero_description','hero_image')}),
-               ('Contact',{'fields':('phone','email','address','delivery_message')}),
+               ('Contact',{'fields':('phone','email','address','gstin','delivery_message')}),
                ('Size guide popup',{'fields':('size_guide_note','size_chart_pdf')}),
                ('Appointments (Calendly)',{'fields':('calendly_url','calendly_primary_color','calendly_text_color','calendly_background_color')}),
                ('Footer & social links',{'fields':('footer_tagline','footer_about','newsletter_eyebrow','newsletter_title','newsletter_text','instagram_handle','instagram_note','instagram_url','facebook_url','youtube_url','pinterest_url','footer_highlights','footer_services','payment_methods','delivery_partners','footer_note')}),
@@ -145,3 +157,12 @@ class FooterLinkAdmin(admin.ModelAdmin):
 @admin.register(InstagramPost)
 class InstagramPostAdmin(admin.ModelAdmin):
     list_display=['caption','sort_order','active'];list_editable=['sort_order','active']
+
+@admin.register(ProductFAQ)
+class ProductFAQAdmin(admin.ModelAdmin):
+    list_display=['question','product','sort_order','active'];list_editable=['sort_order','active'];list_filter=['active',('product',admin.EmptyFieldListFilter)]
+    search_fields=['question','answer','product__name'];autocomplete_fields=['product']
+@admin.register(ContactMessage)
+class ContactMessageAdmin(admin.ModelAdmin):
+    list_display=['name','email','phone','subject','created_at','handled'];list_editable=['handled'];list_filter=['handled'];search_fields=['name','email','message']
+    readonly_fields=['name','email','phone','subject','message','created_at']

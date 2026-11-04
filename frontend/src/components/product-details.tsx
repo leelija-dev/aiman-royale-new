@@ -3,11 +3,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {useEffect, useRef, useState} from 'react';
 import {useRouter} from 'next/navigation';
-import {Heart, ShoppingBag, ArrowRight, Check, X, ZoomIn, Minus, Plus, Ruler, TicketPercent, ChevronDown, Star, PencilLine, CircleAlert, Shirt} from 'lucide-react';
+import {Heart, ShoppingBag, ArrowRight, Check, X, ZoomIn, Minus, Plus, Ruler, TicketPercent, ChevronDown, ChevronLeft, ChevronRight, Star, PencilLine, CircleAlert, Shirt, Link2, Share2} from 'lucide-react';
 import {Bag, Product, money, photo, discount} from '@/lib/types';
 import {api, bagChanged, err} from '@/lib/client';
 import type {PinInfo} from '@/lib/types';
-import {useWishlist} from '@/lib/wishlist';
+import {useWishlist, loginHere} from '@/lib/wishlist';
+import {COUPON_KEY} from '@/components/bag';
 
 type Popup = {ok: true; title: string; detail: string; image: string} | {ok: false; title: string; detail: string};
 type Reviews = {average: number | null; count: number; reviews: {name: string; rating: number; text: string; date: string}[]};
@@ -30,6 +31,10 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
   const [m, setM] = useState<Record<string, string>>({unit: 'cm', bust: '', waist: '', hip: '', armhole: ''}), [mSaved, setMSaved] = useState(false), [mMsg, setMMsg] = useState('');
   const [busy, setBusy] = useState<'' | 'bag' | 'buy'>(''), [popup, setPopup] = useState<Popup | null>(null), [note, setNote] = useState('');
   const [saved, toggleWish] = useWishlist(p.id);
+  const [inBag, setInBag] = useState<Set<number>>(new Set());
+  const refreshBag = () => api<Bag>('cart/').then(b => setInBag(new Set(b.items.map(i => i.variant.id)))).catch(() => {});
+  useEffect(() => { refreshBag(); window.addEventListener('bag-changed', refreshBag); return () => window.removeEventListener('bag-changed', refreshBag); }, []);
+  const variantInBag = !!variant && inBag.has(variant.id);
   const [pin, setPin] = useState(''), [pinMsg, setPinMsg] = useState<{ok: boolean; text: string} | null>(null);
   const checkPin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +47,6 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
         : {ok: false, text: 'Sorry, we can’t deliver to this PIN code yet. Message us on WhatsApp and we’ll help.'});
     } catch { setPinMsg({ok: true, text: deliveryMessage}); }
   };
-  const [couponOpen, setCouponOpen] = useState(false), [coupon, setCoupon] = useState(''), [couponMsg, setCouponMsg] = useState('');
   const [tab, setTab] = useState('details'), [pageUrl, setPageUrl] = useState('');
   useEffect(() => setPageUrl(window.location.href.split('#')[0]), []);
   const measureRef = useRef<HTMLDivElement>(null), popupBtn = useRef<HTMLAnchorElement | HTMLButtonElement>(null);
@@ -52,6 +56,12 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
 
   useEffect(() => { if (popup) popupBtn.current?.focus(); }, [popup]);
   useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { setPopup(null); setZoom(false); } }; window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc); }, []);
+  useEffect(() => {
+    if (!zoom) return;
+    const n = Math.max(1, p.images.length);
+    const keys = (e: KeyboardEvent) => { if (e.key === 'ArrowRight') setImage(x => (x + 1) % n); if (e.key === 'ArrowLeft') setImage(x => (x - 1 + n) % n); };
+    window.addEventListener('keydown', keys); return () => window.removeEventListener('keydown', keys);
+  }, [zoom, p.images.length]);
   useEffect(() => { if (qty > maxQty) setQty(maxQty); }, [maxQty, qty]);
 
   function pickColour(c: string) {
@@ -76,6 +86,7 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
       else await api('cart/', 'POST', {variant: variant.id, quantity: qty, measurements: type === 'custom' ? m : {}});
       bagChanged();
       const bag = await api<Bag>('cart/');
+      setInBag(new Set(bag.items.map(i => i.variant.id)));
       return bag.items.find(i => i.variant.id === variant.id)?.id || -1;
     } catch (e) {
       setPopup({ok: false, title: 'Could not add to bag', detail: err(e)});
@@ -105,7 +116,7 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
   async function onWish() {
     try {
       const r = await toggleWish();
-      if (r === 'login') router.push(`/login?next=${encodeURIComponent(`/products/${p.slug}`)}`);
+      if (r === 'login') router.push(loginHere());
       else setNote(r === 'added' ? 'Saved to your wishlist.' : 'Removed from your wishlist.');
     } catch (e) { setNote(err(e)); }
   }
@@ -157,7 +168,8 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
           <div className="pd-qty"><button type="button" aria-label="Decrease quantity" onClick={() => setQty(Math.max(1, qty - 1))} disabled={qty <= 1}><Minus size={16}/></button><span aria-live="polite">{qty}</span><button type="button" aria-label="Increase quantity" onClick={() => setQty(Math.min(maxQty, qty + 1))} disabled={qty >= maxQty}><Plus size={16}/></button></div></div>
 
         <div className="pd-actions">
-          <button type="button" className="pd-btn pd-btn-bag" disabled={!!busy} onClick={onAdd}><ShoppingBag size={19}/>{busy === 'bag' ? 'Adding…' : 'Add to Bag'}</button>
+          {variantInBag ? <Link href="/cart" className="pd-btn pd-btn-bag pd-go-bag"><ShoppingBag size={19}/>Go to Bag <ArrowRight size={17}/></Link>
+            : <button type="button" className="pd-btn pd-btn-bag" disabled={!!busy} onClick={onAdd}><ShoppingBag size={19}/>{busy === 'bag' ? 'Adding…' : 'Add to Bag'}</button>}
           <button type="button" className="pd-btn pd-btn-buy" disabled={!!busy} onClick={onBuyNow}>{busy === 'buy' ? 'Please wait…' : <>Buy Now <ArrowRight size={18}/></>}</button>
           <div className="pd-actions-pair">
             <button type="button" className={saved ? 'pd-btn pd-btn-wish on' : 'pd-btn pd-btn-wish'} aria-pressed={saved} onClick={onWish}><Heart size={18} fill={saved ? 'currentColor' : 'none'}/>{saved ? 'Wishlisted' : 'Save to Wishlist'}</button>
@@ -175,11 +187,9 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
           <Link href="/info/shipping" className="pd-link">View delivery & return details <ArrowRight size={14}/></Link>
         </div>
 
-        <div className="pd-coupon">
-          <button type="button" aria-expanded={couponOpen} onClick={() => setCouponOpen(!couponOpen)}><TicketPercent size={19}/>Have a coupon?<ChevronDown size={18} className={couponOpen ? 'flip' : ''}/></button>
-          {couponOpen && <form onSubmit={e => { e.preventDefault(); const c = coupon.trim().toUpperCase(); if (!c) return; try { localStorage.setItem('ar-coupon', c); } catch {} setCouponMsg(`Code ${c} saved. It will be applied at checkout.`); }}>
-            <input value={coupon} onChange={e => setCoupon(e.target.value)} placeholder="Enter coupon code" aria-label="Coupon code"/><button className="pd-btn-sm">Apply</button>{couponMsg && <p className="pd-ok"><Check size={16}/>{couponMsg}</p>}</form>}
-        </div>
+        <ProductCoupons/>
+
+        <ShareBar name={p.name} url={pageUrl}/>
 
         <div className="pd-help"><Shirt size={46} strokeWidth={1}/><div><strong>Need help with your fit?</strong><p>Discuss your measurements and styling with our team.</p><Link href="/appointment" className="pd-btn-sm">Book a Fitting <ArrowRight size={15}/></Link></div></div>
       </div>
@@ -218,9 +228,15 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
       </div>
     </div>}
 
-    {zoom && <div className="pd-lightbox" role="dialog" aria-modal="true" aria-label="Zoomed image" onClick={() => setZoom(false)}>
-      <button type="button" className="pd-modal-close" aria-label="Close"><X size={24}/></button>
-      <Image src={images[image]?.url} alt={images[image]?.alt || p.name} fill sizes="100vw" quality={92}/></div>}
+    {zoom && <div className="pd-lightbox" role="dialog" aria-modal="true" aria-label={`Photo ${image + 1} of ${images.length}`} onClick={e => { if (e.target === e.currentTarget) setZoom(false); }}>
+      <button type="button" className="pd-modal-close" aria-label="Close" onClick={() => setZoom(false)}><X size={24}/></button>
+      <div className="pd-lb-img" onClick={() => setZoom(false)}><Image key={images[image]?.url} priority src={images[image]?.url} alt={images[image]?.alt || p.name} fill sizes="100vw" quality={92}/></div>
+      {images.length > 1 && <>
+        <button type="button" className="pd-lb-nav prev" aria-label="Previous photo" onClick={() => setImage((image - 1 + images.length) % images.length)}><ChevronLeft size={28}/></button>
+        <button type="button" className="pd-lb-nav next" aria-label="Next photo" onClick={() => setImage((image + 1) % images.length)}><ChevronRight size={28}/></button>
+        <div className="pd-lb-thumbs">{images.map((im, k) => <button key={im.id + '-' + k} type="button" aria-label={`Show photo ${k + 1}`} aria-pressed={k === image} className={k === image ? 'on' : ''} onClick={() => setImage(k)}><Image src={im.url} alt="" width={60} height={80}/></button>)}</div>
+        <p className="pd-lb-count">{image + 1} / {images.length}</p></>}
+    </div>}
   </>;
 }
 
@@ -231,11 +247,26 @@ function Stars({value, size = 16}: {value: number; size?: number}) {
 function ReviewsBlock({slug, section = false}: {slug: string; section?: boolean}) {
   const router = useRouter();
   const [data, setData] = useState<Reviews | null>(null), [open, setOpen] = useState(false), [rating, setRating] = useState(0), [text, setText] = useState(''), [msg, setMsg] = useState(''), [busy, setBusy] = useState(false);
-  useEffect(() => { api<Reviews>(`products/${slug}/reviews/`).then(setData).catch(() => setData({average: null, count: 0, reviews: []})); }, [slug]);
+  const DRAFT = 'ar-review-draft';
+  useEffect(() => {
+    api<Reviews>(`products/${slug}/reviews/`).then(setData).catch(() => setData({average: null, count: 0, reviews: []}));
+    // Came back from sign-in with a review typed before: save it now.
+    if (!section) return;
+    let draft: {slug: string; rating: number; text: string} | null = null;
+    try { draft = JSON.parse(localStorage.getItem(DRAFT) || 'null'); } catch {}
+    if (!draft || draft.slug !== slug) return;
+    api<{message: string}>(`products/${slug}/reviews/`, 'POST', {rating: draft.rating, text: draft.text})
+      .then(r => { try { localStorage.removeItem(DRAFT); } catch {} setMsg(r.message); document.getElementById('reviews')?.scrollIntoView({behavior: 'smooth', block: 'center'}); })
+      .catch(() => { setRating(draft!.rating); setText(draft!.text); setOpen(true); }); // still signed out: keep the draft in the form
+  }, [slug, section]);
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setMsg('');
-    try { const r = await api<{message: string}>(`products/${slug}/reviews/`, 'POST', {rating, text}); setMsg(r.message); setOpen(false); setText(''); setRating(0); }
-    catch (e2) { const m = err(e2); if (/sign in/i.test(m)) router.push(`/login?next=${encodeURIComponent(`/products/${slug}#reviews`)}`); else setMsg(m); }
+    try { const r = await api<{message: string}>(`products/${slug}/reviews/`, 'POST', {rating, text}); setMsg(r.message); setOpen(false); setText(''); setRating(0); try { localStorage.removeItem(DRAFT); } catch {} }
+    catch (e2) {
+      const m = err(e2);
+      if (/sign in/i.test(m)) { try { localStorage.setItem(DRAFT, JSON.stringify({slug, rating, text})); } catch {} router.push(`/login?next=${encodeURIComponent(`/products/${slug}#reviews`)}`); }
+      else setMsg(m);
+    }
     finally { setBusy(false); }
   }
   return <section className={section ? 'pd-reviews pd-section' : 'pd-reviews'} id={section ? 'reviews' : undefined}>
@@ -246,7 +277,7 @@ function ReviewsBlock({slug, section = false}: {slug: string; section?: boolean}
       <div className="pd-rate" role="radiogroup" aria-label="Your rating">{[1, 2, 3, 4, 5].map(i => <button type="button" key={i} role="radio" aria-checked={rating === i} aria-label={`${i} star${i > 1 ? 's' : ''}`} onClick={() => setRating(i)}><Star size={26} fill={i <= rating ? 'currentColor' : 'none'}/></button>)}</div>
       <textarea value={text} onChange={e => setText(e.target.value)} rows={4} placeholder="Tell us about the fit, fabric and how it felt to wear." aria-label="Your review" minLength={10} required/>
       <button className="pd-btn pd-btn-bag" disabled={busy || !rating}>{busy ? 'Sending…' : 'Submit Review'}</button></form>}
-    {msg && <p className="pd-ok"><Check size={16}/>{msg}</p>}
+    {msg && <p className="pd-ok pd-review-ok" role="status"><Check size={16}/>{msg}</p>}
     {data?.reviews.map((r, i) => <article key={i} className="pd-review"><Stars value={r.rating} size={14}/><p>{r.text}</p><small>{r.name} · {new Date(r.date).toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})}</small></article>)}
   </section>;
 }
@@ -254,3 +285,52 @@ function ReviewsBlock({slug, section = false}: {slug: string; section?: boolean}
 // Fallback swatch colours for common names; the colour filter list in admin (Colours) is the source of truth on listing pages.
 const COLOUR_HEX: Record<string, string> = {maroon: '#6b1426', 'rani pink': '#d6246e', rani: '#c71f63', 'rose gold': '#c9877d', copper: '#b8642f', wine: '#5c0f2e', purple: '#4b2a7a',
   green: '#3f6b4a', navy: '#24315e', red: '#b3202a', pink: '#e48aa6', beige: '#d9c4a5', white: '#f4f1ea', black: '#1f1a18', ivory: '#efe6d2', gold: '#c9a54c', mouse: '#9b8f86', teal: '#1f6f6b'};
+
+
+/* ---------- Coupons: active offers with Apply; the chosen code is used at checkout ---------- */
+type CouponInfo = {code: string; percent: number; minimum: string; description: string; expires_at: string | null};
+function ProductCoupons() {
+  const [list, setList] = useState<CouponInfo[]>([]), [applied, setApplied] = useState(''), [code, setCode] = useState(''), [msg, setMsg] = useState<{ok: boolean; text: string} | null>(null);
+  useEffect(() => {
+    api<CouponInfo[]>('coupons/').then(setList).catch(() => {});
+    try { setApplied(localStorage.getItem(COUPON_KEY) || ''); } catch {}
+  }, []);
+  const save = (c: string) => { try { localStorage.setItem(COUPON_KEY, c); } catch {} setApplied(c); setMsg({ok: true, text: `${c} applied — the discount will be taken off at checkout.`}); };
+  const remove = () => { try { localStorage.removeItem(COUPON_KEY); } catch {} setApplied(''); setMsg(null); };
+  async function apply(e: React.FormEvent) {
+    e.preventDefault();
+    const c = code.trim().toUpperCase(); if (!c) return;
+    try { const r = await api<{valid: boolean; code?: string; message?: string}>(`coupons/check/?code=${encodeURIComponent(c)}`); if (r.valid) { save(r.code!); setCode(''); } else setMsg({ok: false, text: r.message || 'Invalid coupon.'}); }
+    catch (e2) { setMsg({ok: false, text: err(e2)}); }
+  }
+  return <div className="pd-coupons">
+    <p className="pd-label"><TicketPercent size={18}/> Available offers</p>
+    {list.length > 0 && <ul>{list.map(c => <li key={c.code} className={applied === c.code ? 'on' : ''}>
+      <div><strong>{c.code}</strong><span>{c.description || `${c.percent}% off`}{Number(c.minimum) > 0 ? ` · on orders above ${money(c.minimum)}` : ''}</span>
+        {c.expires_at && <small>Valid till {new Date(c.expires_at).toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})}</small>}</div>
+      {applied === c.code ? <button type="button" className="pd-cp-btn on" onClick={remove}><Check size={14}/> Applied</button> : <button type="button" className="pd-cp-btn" onClick={() => save(c.code)}>Apply</button>}</li>)}</ul>}
+    <form onSubmit={apply}><input value={code} onChange={e => setCode(e.target.value)} placeholder="Enter coupon code" aria-label="Coupon code"/><button className="pd-btn-sm">Apply</button></form>
+    {applied && !list.some(c => c.code === applied) && <p className="pd-ok"><Check size={16}/>{applied} applied. <button type="button" className="pd-link-btn" onClick={remove}>Remove</button></p>}
+    {msg && <p className={msg.ok ? 'pd-ok' : 'pd-err'}>{msg.ok ? <Check size={16}/> : <CircleAlert size={16}/>}{msg.text}</p>}
+  </div>;
+}
+
+/* ---------- Share: WhatsApp, Telegram, Facebook, copy link ---------- */
+function ShareBar({name, url}: {name: string; url: string}) {
+  const [copied, setCopied] = useState(false);
+  const text = `${name} — Aiman Royale`;
+  const u = encodeURIComponent(url), t = encodeURIComponent(text);
+  async function copy() {
+    try { await navigator.clipboard.writeText(url); }
+    catch { const i = document.createElement('input'); i.value = url; document.body.appendChild(i); i.select(); document.execCommand('copy'); i.remove(); }
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
+  }
+  return <div className="pd-share"><p className="pd-label"><Share2 size={17}/> Share</p>
+    <div>
+      <a className="sh-wa" href={`https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`} target="_blank" rel="noopener noreferrer" aria-label="Share on WhatsApp"><WhatsAppIcon/></a>
+      <a className="sh-tg" href={`https://t.me/share/url?url=${u}&text=${t}`} target="_blank" rel="noopener noreferrer" aria-label="Share on Telegram"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden><path d="M21.9 4.3 18.7 19.4c-.2 1-.9 1.3-1.7.8l-4.8-3.6-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.9 8.9-8c.4-.3-.1-.5-.6-.2L6.5 13.1 1.8 11.6c-1-.3-1-1 .2-1.5L20.6 3c.9-.3 1.6.2 1.3 1.3Z"/></svg></a>
+      <a className="sh-fb" href={`https://www.facebook.com/sharer/sharer.php?u=${u}`} target="_blank" rel="noopener noreferrer" aria-label="Share on Facebook"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden><path d="M14 8V6.2c0-.8.5-1.2 1.2-1.2H17V2h-2.6C11.7 2 11 3.9 11 5.9V8H8.5v3H11v11h3V11h2.6l.4-3H14Z"/></svg></a>
+      <button type="button" className="sh-copy" onClick={copy} aria-label="Copy product link">{copied ? <><Check size={16}/> Copied</> : <><Link2 size={16}/> Copy link</>}</button>
+    </div>
+  </div>;
+}

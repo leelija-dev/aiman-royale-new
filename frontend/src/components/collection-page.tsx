@@ -5,7 +5,7 @@ import {useRouter} from 'next/navigation';
 import {useState} from 'react';
 import {Heart, ChevronUp, ArrowDown, ArrowUpRight, ArrowLeft, ArrowRight, LayoutGrid, List, Search} from 'lucide-react';
 import {api} from '@/lib/client';
-import {useWishlist} from '@/lib/wishlist';
+import {useWishlist, loginHere} from '@/lib/wishlist';
 import {Product, ProductPage, Facets, money, photo, discount} from '@/lib/types';
 import type {MenuLink} from '@/lib/menu';
 import {type Query, list, toParams} from '@/lib/query';
@@ -61,7 +61,7 @@ export function Filters({base, query, styles = [], facets, variant = 'category'}
 function WishHeart({id, slug}: {id: number; slug: string}) {
   const router = useRouter(); const [on, toggle] = useWishlist(id);
   return <button type="button" className={on ? 'cp-heart on' : 'cp-heart'} aria-label={on ? 'Remove from wishlist' : 'Add to wishlist'} aria-pressed={on}
-    onClick={async () => { try { if (await toggle() === 'login') router.push(`/login?next=${encodeURIComponent(`/products/${slug}`)}`); } catch {} }}>
+    onClick={async () => { try { if (await toggle() === 'login') router.push(loginHere()); } catch {} }}>
     <Heart size={20} fill={on ? 'currentColor' : 'none'}/>
   </button>;
 }

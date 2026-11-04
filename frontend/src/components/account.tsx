@@ -3,7 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {useEffect, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
-import {Package, CalendarDays, UserRound, Heart, LogOut, MapPin, Check, CircleAlert, Truck, CreditCard, ArrowRight, X, ShoppingBag} from 'lucide-react';
+import {Package, CalendarDays, UserRound, Heart, LogOut, MapPin, Check, CircleAlert, Truck, CreditCard, ArrowRight, X, ShoppingBag, FileDown, XCircle} from 'lucide-react';
 import {api, bagChanged, err} from '@/lib/client';
 import {Order, Product, User, money, photo, discount} from '@/lib/types';
 import {useWishlist} from '@/lib/wishlist';
@@ -13,7 +13,7 @@ type FullOrder = Order & {address: Record<string, string>; payment_method: strin
 const STEPS = ['Placed', 'Confirmed', 'Shipped', 'Delivered'];
 const STEP_OF: Record<string, number> = {pending: 0, cod: 1, paid: 1, processing: 1, shipped: 2, delivered: 3};
 const LABEL: Record<string, string> = {pending: 'Awaiting payment', paid: 'Confirmed', cod: 'Confirmed · Cash on Delivery', processing: 'Being prepared', shipped: 'Shipped', delivered: 'Delivered',
-  cancelled: 'Cancelled', expired: 'Payment not completed', refund_required: 'Needs attention', refunded: 'Refunded'};
+  cancelled: 'Cancelled', expired: 'Payment not completed', refund_required: 'Cancelled · Refund pending', refunded: 'Cancelled · Refunded'};
 const fmtDate = (d: string, time = false) => new Date(d).toLocaleString('en-IN', {day: 'numeric', month: 'short', year: 'numeric', ...(time ? {hour: 'numeric', minute: '2-digit'} : {})});
 const initials = (u: User) => (u.name || u.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
 
@@ -24,8 +24,16 @@ function Tracker({status}: {status: string}) {
     <li key={s} className={i < at ? 'done' : i === at ? 'on' : ''}><span>{i <= at && (i < at || status === 'delivered') ? <Check size={13}/> : i + 1}</span>{s}</li>)}</ol>;
 }
 
-function OrderCard({o}: {o: FullOrder}) {
+function OrderCard({o: initial}: {o: FullOrder}) {
+  const [o, setO] = useState(initial), [asking, setAsking] = useState(false), [reason, setReason] = useState(''), [busy, setBusy] = useState(false), [msg, setMsg] = useState('');
   const a = o.address || {};
+  const ref = o.id.slice(0, 8).toUpperCase();
+  async function cancel() {
+    setBusy(true); setMsg('');
+    try { const d = await api<FullOrder>(`orders/${o.id}/cancel/`, 'POST', {reason}); setO({...o, ...d}); setAsking(false);
+      setMsg(d.status === 'refunded' ? 'Your order is cancelled. The refund has been started to your original payment method.' : d.status === 'refund_required' ? 'Your order is cancelled. Our team will process your refund shortly.' : 'Your order is cancelled.'); }
+    catch (e) { setMsg(err(e)); } finally { setBusy(false); }
+  }
   return <article className="ac-order">
     <header><div><p className="ac-ref">Order #{o.id.slice(0, 8).toUpperCase()}</p><small>Placed on {fmtDate(o.created_at, true)}</small></div><span className={`ac-pill ${o.status}`}>{LABEL[o.status] || o.status}</span></header>
     <Tracker status={o.status}/>
@@ -44,10 +52,22 @@ function OrderCard({o}: {o: FullOrder}) {
           {!!o.tracking_events?.length && <ol className="ac-scans">{o.tracking_events.slice(0, 4).map((e, k) => <li key={k}><strong>{e.status}</strong>{e.location && ` · ${e.location}`}<small>{e.time ? new Date(e.time).toLocaleString('en-IN', {dateStyle: 'medium', timeStyle: 'short'}) : ''}{e.detail && ` — ${e.detail}`}</small></li>)}</ol>}</>}</div>
     </div>
     <footer><div className="ac-totals"><span>Subtotal {money(o.subtotal)}</span>{Number(o.discount) > 0 && <span>Discount −{money(o.discount)}</span>}<span>Shipping {Number(o.shipping) ? money(o.shipping) : 'Free'}</span><strong>Total {money(o.total)}</strong></div>
-      {(o.tracking_url || o.awb) && <a className="pd-btn-sm ac-track-btn" href={o.tracking_url || `https://www.delhivery.com/track/package/${o.awb}`} target="_blank" rel="noopener noreferrer"><Truck size={15}/> Track order</a>}
+      <div className="ac-actions">
+        {['paid', 'cod', 'processing', 'shipped', 'delivered'].includes(o.status) && <Link className="pd-btn-sm ac-track-btn" href={`/track?order=${ref}`}><Truck size={15}/> Track order</Link>}
+        {!['pending', 'expired'].includes(o.status) && <a className="pd-btn-sm ac-inv-btn" href={`/api/orders/${o.id}/invoice/`} download><FileDown size={15}/> Download invoice</a>}
+        {o.can_cancel && !asking && <button type="button" className="pd-btn-sm ac-cancel-btn" onClick={() => setAsking(true)}><XCircle size={15}/> Cancel order</button>}
+      </div>
       {o.status === 'pending' && <Link className="pd-btn-sm" href={`/payment/return?order=${o.id}`}>Check payment status</Link>}</footer>
+    {asking && <div className="ac-cancel-box" role="group" aria-label="Cancel this order">
+      <p><strong>Cancel order #{ref}?</strong> You can cancel until the parcel is picked up by Delhivery.{o.payment_method !== 'cod' ? ' Online payments are refunded to the original payment method.' : ''}</p>
+      <select value={reason} onChange={e => setReason(e.target.value)} aria-label="Reason for cancelling"><option value="">Reason (optional)</option>
+        {['Ordered by mistake', 'Found a better price', 'Delivery is too late', 'Want to change size or colour', 'Other'].map(r => <option key={r}>{r}</option>)}</select>
+      <div><button type="button" className="pd-btn-sm ac-cancel-btn" disabled={busy} onClick={cancel}>{busy ? 'Cancelling…' : 'Yes, cancel order'}</button>
+        <button type="button" className="pd-btn-sm" onClick={() => setAsking(false)}>Keep order</button></div></div>}
+    {msg && <p className="ac-hint" role="status">{msg}</p>}
     {o.status === 'pending' && <p className="ac-hint">Payment is awaiting confirmation. Unpaid orders are released after 30 minutes. If you were charged, contact us with this order number before paying again.</p>}
-    {o.status === 'refund_required' && <p className="ac-hint">Your payment arrived after the reservation closed. Our team will reconcile it — please contact us with this order number.</p>}
+    {o.cancelled_at && <p className="ac-hint">Cancelled on {fmtDate(o.cancelled_at, true)}{o.cancel_reason ? ` · ${o.cancel_reason}` : ''}.{o.status === 'refund_required' ? ' Our team will process your refund shortly.' : o.status === 'refunded' ? ' Refund started to your original payment method.' : ''}</p>}
+    {o.status === 'refund_required' && !o.cancelled_at && <p className="ac-hint">Your payment arrived after the reservation closed. Our team will reconcile it — please contact us with this order number.</p>}
   </article>;
 }
 
