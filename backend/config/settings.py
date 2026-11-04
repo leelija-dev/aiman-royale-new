@@ -117,6 +117,14 @@ WHATSAPP_TOKEN=os.getenv('WHATSAPP_TOKEN','')
 WHATSAPP_PHONE_ID=os.getenv('WHATSAPP_PHONE_ID','')
 WHATSAPP_OTP_TEMPLATE=os.getenv('WHATSAPP_OTP_TEMPLATE','')
 WHATSAPP_GRAPH_VERSION=os.getenv('WHATSAPP_GRAPH_VERSION','')
+# Calendly personal access token (Calendly → Integrations → API & Webhooks). Optional: with it, the
+# booked date/time and attendee are fetched and shown under My Account → Appointments.
+CALENDLY_TOKEN=os.getenv('CALENDLY_TOKEN','').strip().strip('"')
+# Continue with Google (OAuth). Keys live only in backend/.env. The redirect URI must be added in
+# Google Cloud Console → Credentials → your OAuth client → Authorised redirect URIs.
+GOOGLE_CLIENT_ID=os.getenv('GOOGLE_CLIENT_ID','').strip().strip('"')
+GOOGLE_CLIENT_SECRET=os.getenv('GOOGLE_CLIENT_SECRET','').strip().strip('"')
+GOOGLE_REDIRECT_URI=(os.getenv('GOOGLE_REDIRECT_URI') or PUBLIC_SITE_URL+'/api/auth/google/callback/').strip()
 REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES']=['shop.security.SafeSessionAuthentication']
 REST_FRAMEWORK['EXCEPTION_HANDLER']='shop.security.exception_handler'
 

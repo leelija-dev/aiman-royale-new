@@ -94,6 +94,31 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
     }
   }
 
+  const CUSTOM_DRAFT = 'ar-custom-draft';
+  const [customDone, setCustomDone] = useState(false);
+  async function sendCustom(draft?: {variant: number; m: Record<string, string>; qty: number}) {
+    const body = draft || {variant: (variant || p.variants.find(v => v.colour === colour))?.id || 0, m, qty};
+    if (!draft && !mSaved) {
+      setPopup({ok: false, title: 'Add your measurements', detail: 'Enter and save your bust, waist, hip and armhole measurements below, then send your request.'});
+      measureRef.current?.scrollIntoView({behavior: 'smooth', block: 'center'}); return;
+    }
+    setBusy('bag');
+    try {
+      const me = await api<{user: unknown}>('auth/me/').catch(() => ({user: null}));
+      if (!me.user) { try { localStorage.setItem(CUSTOM_DRAFT, JSON.stringify({slug: p.slug, ...body})); } catch {} router.push(loginHere()); return; }
+      await api('custom-requests/', 'POST', {product: p.slug, variant: body.variant || undefined, measurements: body.m, quantity: body.qty});
+      try { localStorage.removeItem(CUSTOM_DRAFT); } catch {}
+      setCustomDone(true);
+    } catch (e) { setPopup({ok: false, title: 'Could not send your request', detail: err(e)}); }
+    finally { setBusy(''); }
+  }
+  // Came back from sign-in with a custom request started: send it now.
+  useEffect(() => {
+    let d: {slug: string; variant: number; m: Record<string, string>; qty: number} | null = null;
+    try { d = JSON.parse(localStorage.getItem(CUSTOM_DRAFT) || 'null'); } catch {}
+    if (d && d.slug === p.slug) { setType('custom'); setM(d.m); setMSaved(true); api<{user: unknown}>('auth/me/').then(r => { if (r.user) sendCustom(d!); }).catch(() => {}); }
+  }, [p.slug]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function onAdd() {
     setBusy('bag');
     if (await addToBag()) setPopup({ok: true, title: 'Added to your bag', detail: `${p.name} · Size ${variant!.size} · ${colour} · Qty ${qty}`, image: images[0].url});
@@ -105,7 +130,8 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
     const id = await addToBag(true);
     if (id) {
       const me = await api<{user: unknown}>('auth/me/').catch(() => ({user: null}));
-      const next = id > 0 ? `/checkout?item=${id}` : '/checkout';
+      // Use the size/colour (variant), not the bag line: signing in moves the bag and gives lines new ids.
+      const next = id > 0 && variant ? `/checkout?variant=${variant.id}&qty=${qty}` : '/checkout';
       // Not signed in: sign in (or create an account) first, then come straight back to checkout.
       router.push(me.user ? next : `/login?next=${encodeURIComponent(next)}`);
       return;
@@ -168,9 +194,12 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
           <div className="pd-qty"><button type="button" aria-label="Decrease quantity" onClick={() => setQty(Math.max(1, qty - 1))} disabled={qty <= 1}><Minus size={16}/></button><span aria-live="polite">{qty}</span><button type="button" aria-label="Increase quantity" onClick={() => setQty(Math.min(maxQty, qty + 1))} disabled={qty >= maxQty}><Plus size={16}/></button></div></div>
 
         <div className="pd-actions">
-          {variantInBag ? <Link href="/cart" className="pd-btn pd-btn-bag pd-go-bag"><ShoppingBag size={19}/>Go to Bag <ArrowRight size={17}/></Link>
+          {type === 'custom' ? <>
+            <button type="button" className="pd-btn pd-btn-bag pd-custom-btn" disabled={!!busy} onClick={() => sendCustom()}><Ruler size={19}/>{busy ? 'Sending…' : 'Send Custom Request'}</button>
+            <p className="pd-custom-note">Our team checks your measurements and confirms the price. You pay once it’s accepted — from My Account → Custom Requests.</p></>
+          : <>{variantInBag ? <Link href="/cart" className="pd-btn pd-btn-bag pd-go-bag"><ShoppingBag size={19}/>Go to Bag <ArrowRight size={17}/></Link>
             : <button type="button" className="pd-btn pd-btn-bag" disabled={!!busy} onClick={onAdd}><ShoppingBag size={19}/>{busy === 'bag' ? 'Adding…' : 'Add to Bag'}</button>}
-          <button type="button" className="pd-btn pd-btn-buy" disabled={!!busy} onClick={onBuyNow}>{busy === 'buy' ? 'Please wait…' : <>Buy Now <ArrowRight size={18}/></>}</button>
+          <button type="button" className="pd-btn pd-btn-buy" disabled={!!busy} onClick={onBuyNow}>{busy === 'buy' ? 'Please wait…' : <>Buy Now <ArrowRight size={18}/></>}</button></>}
           <div className="pd-actions-pair">
             <button type="button" className={saved ? 'pd-btn pd-btn-wish on' : 'pd-btn pd-btn-wish'} aria-pressed={saved} onClick={onWish}><Heart size={18} fill={saved ? 'currentColor' : 'none'}/>{saved ? 'Wishlisted' : 'Save to Wishlist'}</button>
             <a className="pd-btn pd-btn-wa" href={waHref} target="_blank" rel="noopener noreferrer"><WhatsAppIcon/>Order on WhatsApp</a>
@@ -214,6 +243,14 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
     </div>}
 
     {tab !== 'reviews' && <ReviewsBlock slug={p.slug} section/>}
+
+    {customDone && <div className="pd-modal" role="dialog" aria-modal="true" aria-labelledby="pd-custom-title" onClick={e => { if (e.target === e.currentTarget) setCustomDone(false); }}>
+      <div className="pd-modal-box ok"><button type="button" className="pd-modal-close" aria-label="Close" onClick={() => setCustomDone(false)}><X size={20}/></button>
+        <div className="pd-modal-icon"><Check size={28}/></div><h2 id="pd-custom-title">Custom request sent</h2>
+        <div className="pd-modal-item"><Image src={images[0].url} alt="" width={64} height={84}/><p>{p.name} · {colour}<br/>Bust {m.bust} · Waist {m.waist} · Hip {m.hip} · Armhole {m.armhole} {m.unit}</p></div>
+        <p>We’ll review your measurements and confirm the price by email. Once accepted, pay from My Account.</p>
+        <div className="pd-modal-actions"><Link href="/account?tab=custom" className="pd-btn pd-btn-bag">View my requests <ArrowRight size={17}/></Link>
+          <button type="button" className="pd-modal-link" onClick={() => setCustomDone(false)}>Continue shopping</button></div></div></div>}
 
     {popup && <div className="pd-modal" role="dialog" aria-modal="true" aria-labelledby="pd-modal-title" onClick={e => { if (e.target === e.currentTarget) setPopup(null); }}>
       <div className={popup.ok ? 'pd-modal-box ok' : 'pd-modal-box bad'}>

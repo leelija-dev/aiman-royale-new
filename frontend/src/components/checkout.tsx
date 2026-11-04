@@ -61,23 +61,45 @@ export function CheckoutPage({site}: {site: Site}) {
   }, [address?.pincode]);
   const [method, setMethod] = useState<Method>('upi'), [agree, setAgree] = useState(false);
   const [coupon, setCoupon] = useState(''), [promoMsg, setPromoMsg] = useState<{ok: boolean; text: string} | null>(null), [note, setNote] = useState('');
-  const [itemIds, setItemIds] = useState<number[]>([]);
+  const [itemIds, setItemIds] = useState<number[]>([]), [customId, setCustomId] = useState(0);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [order, setOrder] = useState<Order | null>(null), [key, setKey] = useState('');
 
   useEffect(() => {
     setKey(crypto.randomUUID());
     setNote(read(NOTE_KEY));
-    // Buy Now sends ?item=<bag item id>: check out only that item and leave the rest in the bag.
-    const only = Number(new URLSearchParams(window.location.search).get('item')) || 0;
+    // Buy Now sends ?variant=<size/colour id>: check out only that product and leave the rest in the bag.
+    const qs = new URLSearchParams(window.location.search);
+    const onlyVariant = Number(qs.get('variant')) || 0, onlyItem = Number(qs.get('item')) || 0;
     (async () => {
       try {
         const [full, me] = await Promise.all([api<Bag>('cart/'), api<{user: User | null}>('auth/me/')]);
         if (!me.user) { router.replace(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
-        const picked = only ? full.items.filter(i => i.id === only) : [];
+        // Paying for an accepted custom (made-to-measure) request: ?custom=<request id>
+        const custom = Number(qs.get('custom')) || 0;
+        if (custom) {
+          type CR = {id: number; status: string; price: string; quantity: number; colour: string; measurements: Record<string, string>; product: {name: string; slug: string; image: string}};
+          const r = (await api<CR[]>('custom-requests/')).find(x => x.id === custom && x.status === 'accepted');
+          if (!r) { setError('This custom request is not ready for payment. Please check My Account → Custom Requests.'); setUser(me.user); setBag({...full, items: []}); return; }
+          const item = {id: -r.id, quantity: r.quantity, measurements: r.measurements, variant: {id: 0, size: 'Custom fit', colour: r.colour, stock: 1, sku: ''},
+            product: {name: `${r.product.name} (custom fit)`, slug: r.product.slug, price: r.price, mrp: r.price, images: r.product.image ? [{id: 0, url: r.product.image, alt: r.product.name}] : []}} as unknown as Bag['items'][number];
+          setCustomId(r.id); setUser(me.user); setBag({...full, items: [item]});
+          const sa = read(ADDRESS_KEY);
+          const ad: Address = sa ? JSON.parse(sa) : {name: me.user.name || '', phone: me.user.phone || '', email: me.user.email || '', line1: '', line2: '', city: '', state: '', pincode: ''};
+          setAddress(ad); setEditing(!sa);
+          setQuote(await api<Quote>('quote/', 'POST', {custom: r.id}));
+          return;
+        }
+        const picked = onlyVariant ? full.items.filter(i => i.variant.id === onlyVariant).slice(0, 1) : onlyItem ? full.items.filter(i => i.id === onlyItem) : [];
+        // Signing in adds the guest bag to the account bag; keep the quantity chosen on Buy Now.
+        const wantQty = Number(qs.get('qty')) || 0;
+        if (picked.length && wantQty && picked[0].quantity !== wantQty) {
+          try { await api('cart/', 'PATCH', {id: picked[0].id, quantity: wantQty}); picked[0] = {...picked[0], quantity: wantQty}; bagChanged(); } catch {}
+        }
         const b = picked.length ? {...full, items: picked} : full;
-        setItemIds(picked.length ? [only] : []);
+        const ids = picked.map(i => i.id);
+        setItemIds(ids);
         setUser(me.user); setBag(b);
-        const q = picked.length ? {items: [only]} : {};
+        const q = ids.length ? {items: ids} : {};
         const saved = read(ADDRESS_KEY);
         const a: Address = saved ? JSON.parse(saved) : {name: me.user.name || '', phone: me.user.phone || '', email: me.user.email || '', line1: '', line2: '', city: '', state: '', pincode: ''};
         setAddress(a); setEditing(!saved);
@@ -110,7 +132,7 @@ export function CheckoutPage({site}: {site: Site}) {
       const online = method !== 'cod';
       if (online) await loadCashfree();
       const d = await api<{order: Order; payment_session_id: string; mode: 'sandbox' | 'production'}>('checkout/', 'POST', {
-        address: {...address, country: 'IN'}, key, coupon: read(COUPON_KEY), method: online ? 'cashfree' : 'cod', pay_with: online ? method : '', note, consent: true, ...(itemIds.length ? {items: itemIds} : {})});
+        address: {...address, country: 'IN'}, key, coupon: read(COUPON_KEY), method: online ? 'cashfree' : 'cod', pay_with: online ? method : '', note, consent: true, ...(customId ? {custom: customId} : itemIds.length ? {items: itemIds} : {})});
       setOrder(d.order); bagChanged();
       if (d.order.status !== 'pending') { write(COUPON_KEY, ''); write(NOTE_KEY, ''); return; }
       if (!window.Cashfree || !d.payment_session_id) throw Error('The payment window could not open. Your order is saved in your account — please try again from there or contact us.');
@@ -141,7 +163,7 @@ export function CheckoutPage({site}: {site: Site}) {
   return <div className="cp co-page">
     <div className="co-top"><Link href="/cart" className="co-back"><ArrowLeft size={18}/> Back to Bag</Link><Steps at={address && !editing ? 3 : 2}/><span className="co-secure"><Lock size={17}/> Secure Checkout</span></div>
     <div className="co-head"><h1>Complete your order</h1><p>A few final steps to bring your Aiman Royale piece home</p></div>
-    {!bag || !user ? <p className="bag-wrap" role="status">{error || 'Preparing your secure checkout…'}</p> : !items.length && !order ? <div className="empty"><h2>Your bag is empty.</h2><Link className="button" href="/products">Discover the Collection</Link></div> :
+    {!bag || !user ? <p className="bag-wrap" role="status">{error || 'Preparing your secure checkout…'}</p> : !items.length && !order ? <div className="empty"><h2>{error || 'Your bag is empty.'}</h2><Link className="button" href="/products">Discover the Collection</Link></div> :
     <div className="co-grid">
       <div>
         <section className="co-card" id="co-delivery">
@@ -183,7 +205,7 @@ export function CheckoutPage({site}: {site: Site}) {
       </div>
 
       <aside className="co-summary">
-        <div className="co-sum-head"><h2>Order Summary</h2><Link href="/cart">Edit bag <ChevronRight size={16}/></Link></div>
+        <div className="co-sum-head"><h2>Order Summary</h2>{customId ? <Link href="/account?tab=custom">Custom request <ChevronRight size={16}/></Link> : <Link href="/cart">Edit bag <ChevronRight size={16}/></Link>}</div>
         {items.map(i => <div className="co-item" key={i.id}><div className="co-item-img"><Image src={photo(i.product)} alt={i.product.name} fill sizes="170px"/></div>
           <div><h3>{i.product.name}</h3><p>Size {i.variant.size} <span>/</span> {i.variant.colour} <span>/</span> Qty {i.quantity}</p><strong>{money(Number(i.product.price) * i.quantity)}</strong></div></div>)}
         <hr/>
@@ -196,9 +218,9 @@ export function CheckoutPage({site}: {site: Site}) {
         <hr/>
         <div className="sum-total"><span>Estimated total</span><strong>{money(quote ? quote.total : sub)}</strong></div>
         <p className="co-small">Final payable amount is confirmed on the payment screen.</p>
-        <SavingZone applied={coupon && promoMsg?.ok ? coupon : ''} refreshKey={bag}
+        {!customId && <SavingZone applied={coupon && promoMsg?.ok ? coupon : ''} refreshKey={bag}
           onApply={async c => { try { const q = await api<Quote>('quote/', 'POST', {coupon: c, ...(itemIds.length ? {items: itemIds} : {})}); setQuote(q); write(COUPON_KEY, c); setCoupon(c); setPromoMsg({ok: true, text: `You save ${money(q.discount)}`}); } catch (e2) { setPromoMsg({ok: false, text: err(e2)}); } }}
-          onRemove={async () => { write(COUPON_KEY, ''); setCoupon(''); setPromoMsg(null); try { setQuote(await api<Quote>('quote/', 'POST', itemIds.length ? {items: itemIds} : {})); } catch {} }} message={promoMsg}/>
+          onRemove={async () => { write(COUPON_KEY, ''); setCoupon(''); setPromoMsg(null); try { setQuote(await api<Quote>('quote/', 'POST', itemIds.length ? {items: itemIds} : {})); } catch {} }} message={promoMsg}/>}
         <div className="co-help"><span className="co-help-icon"><Headphones size={22}/></span><div><strong>Need help with your order?</strong><p>We’re here to assist you.</p>
           {site.phone && <a href={`tel:+${site.phone.replace(/\D/g, '')}`}><Phone size={17}/> +{site.phone.replace(/\D/g, '')}</a>}
           {site.email && <a href={`mailto:${site.email}`}><Mail size={17}/> {site.email}</a>}</div></div>

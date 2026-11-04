@@ -7,7 +7,7 @@ from django.contrib.auth.hashers import make_password,check_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound,NotAuthenticated
 from django.db import transaction,IntegrityError
 from django.db.models import Q,Count,Min,Max,Avg
 from django.utils.text import slugify
@@ -53,7 +53,7 @@ def merge_cart(request,old_key):
 @api_view(['GET'])
 def site(request):
     s=SiteSettings.current()
-    return Response({'name':s.name,'announcement':s.announcement,'hero_title':s.hero_title,'hero_description':s.hero_description,'hero_image':s.hero_image.url if s.hero_image else '/images/hero.webp','phone':s.phone,'email':s.email,'address':s.address,'cod_enabled':s.cod_enabled,'payment_ready':bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY),'whatsapp_ready':bool(settings.WHATSAPP_TOKEN and settings.WHATSAPP_PHONE_ID and settings.WHATSAPP_OTP_TEMPLATE and settings.WHATSAPP_GRAPH_VERSION),'collections':CollectionSerializer(Collection.objects.filter(active=True),many=True).data,'menu':menu_data(),'delivery_message':s.delivery_message,'calendly':{'url':s.calendly_url,'primary':s.calendly_primary_color,'text':s.calendly_text_color,'background':s.calendly_background_color} if s.calendly_url else None,'social':{k:getattr(s,k+'_url') for k in ['instagram','facebook','youtube','pinterest'] if getattr(s,k+'_url')},'footer_tagline':s.footer_tagline,'footer':footer_data(s),'shop_page':shop_page(s),'occasions':[occasion_data(o) for o in Occasion.objects.filter(active=True)]})
+    return Response({'name':s.name,'announcement':s.announcement,'hero_title':s.hero_title,'hero_description':s.hero_description,'hero_image':s.hero_image.url if s.hero_image else '/images/hero.webp','phone':s.phone,'email':s.email,'address':s.address,'cod_enabled':s.cod_enabled,'payment_ready':bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY),'google_ready':bool(settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET),'whatsapp_ready':bool(settings.WHATSAPP_TOKEN and settings.WHATSAPP_PHONE_ID and settings.WHATSAPP_OTP_TEMPLATE and settings.WHATSAPP_GRAPH_VERSION),'collections':CollectionSerializer(Collection.objects.filter(active=True),many=True).data,'menu':menu_data(),'delivery_message':s.delivery_message,'calendly':{'url':s.calendly_url,'primary':s.calendly_primary_color,'text':s.calendly_text_color,'background':s.calendly_background_color} if s.calendly_url else None,'social':{k:getattr(s,k+'_url') for k in ['instagram','facebook','youtube','pinterest'] if getattr(s,k+'_url')},'footer_tagline':s.footer_tagline,'footer':footer_data(s),'shop_page':shop_page(s),'occasions':[occasion_data(o) for o in Occasion.objects.filter(active=True)]})
 PRICE_STEPS=[5000,8000,10000,15000,20000,30000]
 SIZE_ORDER=['XXS','XS','S','M','L','XL','XXL','2XL','3XL','4XL','5XL','FREE']
 def media_url(f):return f.url if f else ''
@@ -389,6 +389,11 @@ def chosen_items(request):
     except (TypeError,ValueError):raise ValidationError('Invalid items.')
 @api_view(['POST'])
 def quote(request):
+    if request.data.get('custom'):
+        if not request.user.is_authenticated:raise NotAuthenticated()
+        req=CustomRequest.objects.filter(pk=request.data.get('custom'),user=request.user,status='accepted').exclude(price=None).first()
+        if not req:raise ValidationError('This custom request is not ready for payment.')
+        return Response(custom_totals(req))
     only=chosen_items(request);q=get_cart(request).items.select_related('variant__product')
     items=list(q.filter(pk__in=only) if only else q)
     if not items:raise ValidationError('Your bag is empty.')
@@ -407,7 +412,11 @@ def checkout(request):
     pay_with=str(request.data.get('pay_with','') or '')
     if pay_with and pay_with not in PAY_WITH:raise ValidationError('Unknown payment option.')
     note=str(request.data.get('note','') or '').strip()[:500]
-    o,created=reserve_order(request.user,get_cart(request),address.validated_data,key,str(request.data.get('coupon','')),method,only=chosen_items(request))
+    if request.data.get('custom'):
+        try:req_id=int(request.data.get('custom'))
+        except (TypeError,ValueError):raise ValidationError('Invalid custom request.')
+        o,created=reserve_custom_order(request.user,req_id,address.validated_data,key,method)
+    else:o,created=reserve_order(request.user,get_cart(request),address.validated_data,key,str(request.data.get('coupon','')),method,only=chosen_items(request))
     if created and (note or pay_with):
         o.note,o.pay_with=note,(pay_with if method=='cashfree' else '')
         o.save(update_fields=['note','pay_with'])
@@ -459,7 +468,9 @@ def book(request):
     return Response({'id':a.pk,'status':a.status,'message':'Appointment requested. Our team will contact you to confirm.'},status=201)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def appointments(request):return Response(AppointmentSerializer(Appointment.objects.filter(user=request.user),many=True).data)
+def appointments(request):
+    q=Appointment.objects.filter(Q(user=request.user)|Q(email__iexact=request.user.email,user__isnull=True)).exclude(status='cancelled').select_related('slot')
+    return Response(AppointmentSerializer(sorted(q,key=lambda a:a.starts_at or (a.slot.starts_at if a.slot_id else a.created_at),reverse=True),many=True).data)
 @api_view(['POST'])
 @throttle_classes([AuthThrottle])
 def subscribe(request):
@@ -470,7 +481,10 @@ def subscribe(request):
 @api_view(['GET'])
 def page(request,slug):
     p=get_object_or_404(Page,slug=slug,published=True)
-    return Response({'title':p.title,'body':p.body})
+    from .richtext import clean_html
+    # Imported policy pages hold HTML (headings, lists); it is cleaned to a safe allow-list before display.
+    html=clean_html(p.body) if re.search(r'<(p|h[2-4]|ul|ol|li|br|strong)\b',p.body,re.I) else ''
+    return Response({'title':p.title,'body':'' if html else p.body,'html':html,'updated':p.updated_at if hasattr(p,'updated_at') else None})
 @api_view(['GET'])
 def health(request):return Response({'status':'ok'})
 
@@ -563,3 +577,115 @@ def coupon_check(request):
     c=Coupon.objects.filter(code=code,active=True).filter(Q(expires_at__isnull=True)|Q(expires_at__gt=timezone.now())).first()
     if not c:return Response({'valid':False,'message':'This coupon code is not valid or has expired.'})
     return Response({'valid':True,'code':c.code,'percent':c.percent,'minimum':c.minimum,'description':c.description})
+
+
+# ---------- Continue with Google ----------
+def safe_next(value):
+    """Only same-site paths, never back to the sign-in pages."""
+    v=str(value or '')
+    if not v.startswith('/') or v.startswith('//') or re.match(r'^/(login|register)(/|$|\?)',v):return '/account'
+    return v[:500]
+
+def google_start(request):
+    from urllib.parse import urlencode
+    from django.http import HttpResponseRedirect
+    if not (settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET):return HttpResponseRedirect('/login?error=google-unavailable')
+    state=secrets.token_urlsafe(24)
+    request.session['google_state']=state;request.session['google_next']=safe_next(request.GET.get('next'))
+    q={'client_id':settings.GOOGLE_CLIENT_ID,'redirect_uri':settings.GOOGLE_REDIRECT_URI,'response_type':'code','scope':'openid email profile','state':state,'prompt':'select_account'}
+    return HttpResponseRedirect('https://accounts.google.com/o/oauth2/v2/auth?'+urlencode(q))
+
+def google_callback(request):
+    import requests as http
+    from django.http import HttpResponseRedirect
+    expected=request.session.pop('google_state',None);nxt=request.session.pop('google_next','/account')
+    fail=lambda code:HttpResponseRedirect(f'/login?error={code}&next={nxt}')
+    if request.GET.get('error'):return fail('google-cancelled')
+    if not expected or not hmac.compare_digest(expected,str(request.GET.get('state',''))):return fail('google-expired')
+    try:
+        tok=http.post('https://oauth2.googleapis.com/token',data={'code':request.GET.get('code',''),'client_id':settings.GOOGLE_CLIENT_ID,'client_secret':settings.GOOGLE_CLIENT_SECRET,
+                      'redirect_uri':settings.GOOGLE_REDIRECT_URI,'grant_type':'authorization_code'},timeout=15)
+        tok.raise_for_status()
+        info=http.get('https://openidconnect.googleapis.com/v1/userinfo',headers={'Authorization':'Bearer '+tok.json()['access_token']},timeout=15)
+        info.raise_for_status();info=info.json()
+    except (http.RequestException,KeyError,ValueError):return fail('google-failed')
+    email=str(info.get('email','')).strip().lower()
+    if not email or not info.get('email_verified'):return fail('google-unverified')
+    u=Customer.objects.filter(email__iexact=email).first()
+    if u and not u.is_active:return fail('google-failed')
+    if not u:
+        u=Customer(username=email,email=email,first_name=str(info.get('given_name') or info.get('name') or '')[:150],last_name=str(info.get('family_name') or '')[:150])
+        u.set_unusable_password();u.save()
+    old=request.session.session_key;login(request,u,backend='django.contrib.auth.backends.ModelBackend');merge_cart(request,old)
+    return HttpResponseRedirect(nxt)
+
+
+# ---------- Calendly bookings ----------
+CAL_EVENT=re.compile(r'^https://api\.calendly\.com/scheduled_events/[A-Za-z0-9-]{8,64}$')
+CAL_INVITEE=re.compile(r'^https://api\.calendly\.com/scheduled_events/[A-Za-z0-9-]{8,64}/invitees/[A-Za-z0-9-]{8,64}$')
+def calendly_get(uri):
+    import requests as http
+    r=http.get(uri,headers={'Authorization':'Bearer '+settings.CALENDLY_TOKEN},timeout=12);r.raise_for_status()
+    return r.json().get('resource',{})
+
+@api_view(['POST'])
+@throttle_classes([AuthThrottle])
+def calendly_booked(request):
+    """Called by the booking page when Calendly reports a new booking, so it shows under My Account → Appointments."""
+    from django.utils.dateparse import parse_datetime
+    ev=str(request.data.get('event_uri',''));inv=str(request.data.get('invitee_uri',''))
+    if not CAL_EVENT.match(ev) or not CAL_INVITEE.match(inv) or not inv.startswith(ev+'/'):raise ValidationError('Invalid Calendly booking.')
+    st=request.data.get('session_type');md=request.data.get('mode')
+    data={'calendly_event':ev,'source':'calendly','status':'confirmed','session_type':st if st in ('fitting','styling') else 'fitting','mode':md if md in ('studio','video') else 'studio','consent':True}
+    u=request.user if request.user.is_authenticated else None
+    if u:data.update(user=u,name=(u.get_full_name() or u.first_name or u.email)[:100],email=u.email,phone=u.phone or '')
+    if settings.CALENDLY_TOKEN:
+        try:
+            e=calendly_get(ev);i=calendly_get(inv)
+            data.update(starts_at=parse_datetime(e.get('start_time','')) ,name=(i.get('name') or data.get('name') or '')[:100],email=i.get('email') or data.get('email',''))
+            loc=e.get('location') or {};data['location']=str(loc.get('join_url') or loc.get('location') or '')[:300]
+            if e.get('status')=='canceled':data['status']='cancelled'
+        except Exception:pass  # keep the booking even if Calendly's API is unavailable
+    if not data.get('name') and not data.get('email'):raise ValidationError('Please sign in so we can save this booking to your account.')
+    a,_=Appointment.objects.update_or_create(calendly_invitee=inv,defaults=data)
+    return Response({'id':a.pk},status=201)
+
+
+# ---------- Custom requests (My Account → Custom Requests) ----------
+def custom_data(r):
+    p=ProductSerializer(r.product).data
+    return {'id':r.pk,'ref':f'{r.pk:06d}','product':{'name':p['name'],'slug':p['slug'],'image':(p['images'][0]['url'] if p['images'] else ''),'price':p['price']},
+            'variant':r.variant_id,'size':r.variant.size if r.variant_id else '','colour':r.colour,'measurements':r.measurements,'quantity':r.quantity,'note':r.note,
+            'status':r.status,'price':r.price,'total':rupees(r.price)*r.quantity if r.price else None,'admin_note':r.admin_note,
+            'order':str(r.order_id) if r.order_id else '','created_at':r.created_at}
+
+MEASURE_KEYS=['bust','waist','hip','armhole']
+@api_view(['GET','POST'])
+@permission_classes([IsAuthenticated])
+def custom_requests(request):
+    if request.method=='POST':
+        d=request.data
+        p=Product.objects.filter(active=True,slug=str(d.get('product',''))).first()
+        if not p:raise ValidationError('Product not found.')
+        if not p.custom_fit:raise ValidationError('Custom measurements are not available for this product.')
+        m=d.get('measurements') or {}
+        try:
+            clean={k:round(float(m[k]),2) for k in MEASURE_KEYS}
+            if any(not 5<=v<=250 for v in clean.values()) or m.get('unit') not in ('cm','in'):raise ValueError()
+        except (KeyError,TypeError,ValueError):raise ValidationError('Enter all measurements and a valid unit.')
+        clean['unit']=m['unit']
+        v=p.variants.filter(pk=d.get('variant')).first() if d.get('variant') else None
+        try:qty=max(1,min(10,int(d.get('quantity',1))))
+        except (TypeError,ValueError):qty=1
+        r=CustomRequest.objects.create(user=request.user,product=p,variant=v,colour=(v.colour if v else str(d.get('colour','')))[:60],measurements=clean,quantity=qty,note=str(d.get('note','') or '')[:1000])
+        return Response(custom_data(r),status=201)
+    q=CustomRequest.objects.filter(user=request.user).select_related('product','variant').prefetch_related('product__images','product__variants','product__collections','product__occasions')
+    return Response([custom_data(r) for r in q])
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def custom_request_cancel(request,pk):
+    r=get_object_or_404(CustomRequest,pk=pk,user=request.user)
+    if r.status not in ('requested','accepted'):raise ValidationError('This request can no longer be cancelled.')
+    r.status='cancelled';r.save(update_fields=['status','updated_at'])
+    return Response(custom_data(r))

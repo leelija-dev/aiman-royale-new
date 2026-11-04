@@ -119,7 +119,10 @@ def reserve_order(user,cart,address,key,code='',method='cashfree',only=None):
 def release_order(order_id,status='expired'):
     order=Order.objects.select_for_update().get(pk=order_id)
     if order.status!='pending':return
-    for item in order.items.all():Variant.objects.filter(pk=item.variant_id).update(stock=F('stock')+item.quantity)
+    custom=CustomRequest.objects.filter(order=order).first()
+    if custom:CustomRequest.objects.filter(pk=custom.pk).update(status='accepted',order=None)
+    else:
+        for item in order.items.all():Variant.objects.filter(pk=item.variant_id).update(stock=F('stock')+item.quantity)
     order.status=status;order.save(update_fields=['status'])
 
 @transaction.atomic
@@ -189,7 +192,9 @@ def cancel_order(order_id,user,reason=''):
         if order.awb and order.courier_status!='Cancelled' and delhivery.configured():
             try:delhivery.cancel(order)
             except delhivery.DelhiveryError:raise ValidationError('We could not cancel the courier booking right now. Please try again in a few minutes or contact us.')
-        for item in order.items.all():Variant.objects.filter(pk=item.variant_id).update(stock=F('stock')+item.quantity)
+        if CustomRequest.objects.filter(order=order).exists():CustomRequest.objects.filter(order=order).update(status='cancelled')
+        else:
+            for item in order.items.all():Variant.objects.filter(pk=item.variant_id).update(stock=F('stock')+item.quantity)
         order.cancelled_at=timezone.now();order.cancel_reason=reason[:200]
         if order.payment_method=='cod' or not order.gateway_payment_id:
             order.status='cancelled'
@@ -202,3 +207,29 @@ def cancel_order(order_id,user,reason=''):
                 order.status='refund_required'
         order.save(update_fields=['status','cancelled_at','cancel_reason'])
     return order
+
+
+# ---------- Custom (made-to-measure) requests ----------
+def custom_totals(req):
+    subtotal=money(rupees(req.price)*req.quantity)
+    s=SiteSettings.current()
+    shipping=Decimal('0') if subtotal>=s.free_shipping_above else money(rupees(s.shipping_fee))
+    return {'subtotal':subtotal,'discount':Decimal('0'),'shipping':shipping,'total':money(subtotal+shipping)}
+
+@transaction.atomic
+def reserve_custom_order(user,req_id,address,key,method='cashfree'):
+    """Order for an accepted custom request (made to measure: no stock is reserved)."""
+    Customer.objects.select_for_update().get(pk=user.pk)
+    existing=Order.objects.filter(idempotency_key=key,user=user).first()
+    if existing:return existing,False
+    if Order.objects.filter(idempotency_key=key).exists():raise ValidationError('Invalid checkout key.')
+    req=CustomRequest.objects.select_for_update().select_related('product','variant').filter(pk=req_id,user=user).first()
+    if not req or req.status!='accepted' or not req.price:raise ValidationError('This custom request is not ready for payment.')
+    variant=req.variant or req.product.variants.first()
+    if not variant:raise ValidationError('This product is not available.')
+    order=Order.objects.create(user=user,idempotency_key=key,address=address,payment_method=method,status='cod' if method=='cod' else 'pending',
+                               expires_at=timezone.now()+timedelta(minutes=30),**custom_totals(req))
+    OrderItem.objects.create(order=order,variant=variant,name=f'{req.product.name} (custom fit)',unit_price=rupees(req.price),quantity=req.quantity,measurements=req.measurements)
+    req.status='ordered';req.order=order;req.save(update_fields=['status','order','updated_at'])
+    if order.status=='cod':schedule_shipment(order)
+    return order,True

@@ -99,7 +99,9 @@ class OrderAdmin(admin.ModelAdmin):
     def has_delete_permission(self,*args):return False
 @admin.register(Appointment)
 class AppointmentAdmin(admin.ModelAdmin):
-    list_display=['name','slot','session_type','mode','status'];list_filter=['status','mode'];readonly_fields=['consent','created_at']
+    list_display=['name','email','when','session_type','mode','source','status'];list_filter=['status','mode','source'];search_fields=['name','email','phone'];readonly_fields=['consent','created_at','calendly_event','calendly_invitee']
+    @admin.display(description='Date & time')
+    def when(self,a):return a.starts_at or (a.slot.starts_at if a.slot_id else '—')
 @admin.register(SiteSettings)
 class SettingsAdmin(admin.ModelAdmin):
     fieldsets=((None,{'fields':('name','announcement','hero_title','hero_description','hero_image')}),
@@ -166,3 +168,47 @@ class ProductFAQAdmin(admin.ModelAdmin):
 class ContactMessageAdmin(admin.ModelAdmin):
     list_display=['name','email','phone','subject','created_at','handled'];list_editable=['handled'];list_filter=['handled'];search_fields=['name','email','message']
     readonly_fields=['name','email','phone','subject','message','created_at']
+
+@admin.register(CustomRequest)
+class CustomRequestAdmin(admin.ModelAdmin):
+    """Check each made-to-measure request, set the price, then choose Accepted (or Not possible).
+    The customer is emailed and pays from My Account → Custom Requests."""
+    list_display=['ref','customer','product','sizes','colour','quantity','price','status','created_at']
+    list_editable=['price','status'];list_filter=['status','created_at'];list_display_links=['ref']
+    search_fields=['id','user__email','user__first_name','product__name','colour']
+    readonly_fields=['user','product','variant','colour','measurements_view','quantity','note','order','created_at','updated_at']
+    fields=['user','product','variant','colour','measurements_view','quantity','note','price','status','admin_note','order','created_at','updated_at']
+    actions=['export_csv']
+    @admin.display(description='Request',ordering='id')
+    def ref(self,r):return f'#{r.pk:06d}'
+    @admin.display(description='Customer',ordering='user__email')
+    def customer(self,r):return r.user.get_full_name() or r.user.email
+    @admin.display(description='Measurements')
+    def sizes(self,r):
+        m=r.measurements or {};u=m.get('unit','cm')
+        return ' · '.join(f'{k.title()} {m[k]}{u}' for k in ['bust','waist','hip','armhole'] if k in m)
+    measurements_view=sizes
+    def has_add_permission(self,request):return False
+    def save_model(self,request,obj,form,change):
+        before=CustomRequest.objects.filter(pk=obj.pk).values_list('status',flat=True).first()
+        super().save_model(request,obj,form,change)
+        if before!=obj.status and obj.status in ('accepted','rejected'):
+            from django.core.mail import send_mail
+            from django.conf import settings as dj
+            ref=f'#{obj.pk:06d}'
+            if obj.status=='accepted':
+                text=(f'Good news! Your custom request {ref} for {obj.product.name} has been accepted.\n\nPrice: Rs. {obj.price:,.0f} per piece'
+                      f'{" × " + str(obj.quantity) if obj.quantity > 1 else ""}.\n{obj.admin_note}\n\nPay from My Account → Custom Requests: {dj.PUBLIC_SITE_URL}/account?tab=custom')
+            else:
+                text=f'Sorry, we can’t make custom request {ref} for {obj.product.name}.\n{obj.admin_note}\n\nReply to this email or contact us and we’ll help you find an alternative.'
+            send_mail(f'Your Aiman Royale custom request {ref}',text,None,[obj.user.email],fail_silently=True)
+    @admin.action(description='Export selected to CSV')
+    def export_csv(self,request,q):
+        import csv
+        from django.http import HttpResponse
+        r=HttpResponse(content_type='text/csv');r['Content-Disposition']='attachment; filename="custom-requests.csv"'
+        w=csv.writer(r);w.writerow(['Request','Date','Customer','Email','Product','Colour','Bust','Waist','Hip','Armhole','Unit','Qty','Price','Status','Note'])
+        for c in q.select_related('user','product'):
+            m=c.measurements or {}
+            w.writerow([f'#{c.pk:06d}',c.created_at.strftime('%Y-%m-%d %H:%M'),c.user.get_full_name(),c.user.email,c.product.name,c.colour,m.get('bust'),m.get('waist'),m.get('hip'),m.get('armhole'),m.get('unit'),c.quantity,c.price or '',c.get_status_display(),c.note])
+        return r
