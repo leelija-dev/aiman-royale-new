@@ -14,6 +14,9 @@ def sync_shipments():
     for order in Order.objects.exclude(awb='').filter(status__in=['processing','shipped']).exclude(courier_status='Cancelled')[:200]:
         try:delhivery.track(order)
         except delhivery.DelhiveryError:continue
+    for order in Order.objects.exclude(return_awb='').filter(return_status__in=['pickup_booked','in_transit'])[:200]:
+        try:delhivery.track_return(order)
+        except delhivery.DelhiveryError:continue
 
 @shared_task
 def ship_order(pk):

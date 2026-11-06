@@ -565,3 +565,63 @@ class Nov4bTests(TestCase):
         Page.objects.create(slug='privacy',title='Privacy Policy',body='<h2>Data</h2><p>We keep it safe.</p><script>alert(1)</script>',published=True)
         d=APIClient().get('/api/pages/privacy/').data
         self.assertIn('<h2>Data</h2>',d['html']);self.assertNotIn('script',d['html'])
+
+
+ADMIN_STORAGE={'default':{'BACKEND':'django.core.files.storage.FileSystemStorage'},'staticfiles':{'BACKEND':'django.contrib.staticfiles.storage.StaticFilesStorage'}}
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'],STORAGES=ADMIN_STORAGE,**DELHIVERY)
+class LiveIssuesTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.u=Customer.objects.create_user(username='l@example.com',email='l@example.com',password='Test-Password-910!')
+        self.staff=Customer.objects.create_superuser(username='s@example.com',email='s@example.com',password='Test-Password-910!')
+        self.p=Product.objects.create(name='Gown',slug='gown-x',price='3000',mrp='4000')
+        self.v=Variant.objects.create(product=self.p,sku='G-M',size='M',colour='Red',stock=3)
+        cart=Cart.objects.create(user=self.u);CartItem.objects.create(cart=cart,variant=self.v,quantity=1)
+        self.addr={'name':'Lata','phone':'+919000000001','email':'l@example.com','line1':'Test address','city':'Kolkata','state':'West Bengal','pincode':'700001'}
+        self.o=reserve_order(self.u,cart,self.addr,uuid.uuid4(),method='cod')[0]
+        self.c=APIClient();self.c.force_login(self.u)
+        self.a=APIClient();self.a.force_login(self.staff)
+        self.a.cookies['admin_sessionid']=self.a.cookies['sessionid'].value  # admin uses its own session cookie
+    def test_media_served_without_debug(self):
+        import tempfile,os
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d,'home'));open(os.path.join(d,'home','banner.png'),'wb').write(b'\x89PNG test')
+            with override_settings(MEDIA_ROOT=d,DEBUG=False,SECURE_SSL_REDIRECT=True):
+                r=APIClient().get('/media/home/banner.png')  # plain HTTP, like Next.js image resizing inside the server
+                self.assertEqual(r.status_code,200);self.assertEqual(b''.join(r.streaming_content),b'\x89PNG test')
+    def test_upload_folders_created(self):
+        import tempfile,os
+        from .apps import ensure_media_folders
+        with tempfile.TemporaryDirectory() as d, override_settings(MEDIA_ROOT=os.path.join(d,'media')):
+            ensure_media_folders()
+            for f in ['home','products','collections','menu']:self.assertTrue(os.path.isdir(os.path.join(d,'media',f)),f)
+    def test_admin_cancel_cancels_delhivery_shipment(self):
+        Order.objects.filter(pk=self.o.pk).update(awb='111',courier_status='Manifested',status='processing',pickup_requested_at=timezone.now())
+        with patch('shop.delhivery.requests.request',return_value=FakeResponse({'status':True,'remark':'Shipment has been cancelled'})) as req:
+            r=self.a.post('/admin/shop/order/',{'action':'admin_cancel','_selected_action':[str(self.o.pk)]})
+        self.assertEqual(r.status_code,302);self.o.refresh_from_db();self.assertEqual(self.o.status,'cancelled');self.assertEqual(self.o.courier_status,'Cancelled')
+        self.assertEqual(req.call_args.kwargs['json'],{'waybill':'111','cancellation':'true'});self.v.refresh_from_db();self.assertEqual(self.v.stock,3)
+    def test_return_flow(self):
+        ref=str(self.o.id)[:8]
+        self.assertEqual(self.c.post(f'/api/orders/{ref}/return/',{'reason':'Size issue'},format='json').status_code,400)  # not delivered yet
+        Order.objects.filter(pk=self.o.pk).update(status='delivered',awb='111',delivered_at=timezone.now())
+        self.assertTrue(self.c.get('/api/orders/').data[0]['can_return'])
+        r=self.c.post(f'/api/orders/{ref}/return/',{'reason':'Size issue'},format='json');self.assertEqual(r.status_code,200);self.assertEqual(r.data['return_status'],'requested')
+        with patch('shop.delhivery.requests.request',return_value=FakeResponse({'packages':[{'waybill':'999R','status':'Success'}]})) as req:
+            self.a.post('/admin/shop/order/',{'action':'return_approve','_selected_action':[str(self.o.pk)]})
+        sent=json.loads(req.call_args.kwargs['data'].decode().split('data=',1)[1]);self.assertEqual(sent['shipments'][0]['payment_mode'],'Pickup')
+        self.o.refresh_from_db();self.assertEqual(self.o.return_awb,'999R');self.assertEqual(self.o.return_status,'pickup_booked')
+        self.a.post('/admin/shop/order/',{'action':'return_received','_selected_action':[str(self.o.pk)]})
+        self.o.refresh_from_db();self.assertEqual(self.o.return_status,'received');self.assertEqual(self.o.status,'refund_required')  # COD: manual refund
+    def test_return_window_closed(self):
+        Order.objects.filter(pk=self.o.pk).update(status='delivered',delivered_at=timezone.now()-timedelta(days=30))
+        self.assertFalse(self.c.get('/api/orders/').data[0]['can_return'])
+    def test_orders_admin_and_label_tool(self):
+        Order.objects.filter(pk=self.o.pk).update(awb='5627861000183')
+        self.assertContains(self.a.get('/admin/shop/order/'),'#'+str(self.o.id)[:8].upper())
+        self.assertEqual(self.a.get('/admin/shop/shippinglabel/').status_code,200)
+        with patch('shop.delhivery.requests.request',return_value=FakeResponse({'packages':[{'pdf_download_link':'https://example.com/label.pdf'}]})):
+            r=self.a.get('/admin/shop/shippinglabel/',{'awb':'5627861000183'})
+        self.assertEqual(r.status_code,302);self.assertEqual(r['Location'],'https://example.com/label.pdf')
+        with patch('shop.delhivery.requests.request',return_value=FakeResponse({'packages':[{'wbn':'5627861000183','name':'Lata','pin':'700001'}]})):
+            self.assertContains(self.a.get('/admin/shop/shippinglabel/',{'awb':'5627861000183'}),'Print labels')

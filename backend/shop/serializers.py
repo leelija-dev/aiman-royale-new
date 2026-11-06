@@ -47,7 +47,11 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
     items=OrderItemSerializer(many=True,read_only=True)
     can_cancel=serializers.SerializerMethodField()
+    can_return=serializers.SerializerMethodField()
     def get_can_cancel(self,o):
         from .services import can_cancel
         return can_cancel(o)
-    class Meta:model=Order;fields=['id','status','subtotal','discount','shipping','total','address','payment_method','pay_with','note','gateway_order_id','created_at','tracking_url','awb','courier_status','tracking_events','cancelled_at','cancel_reason','can_cancel','items']
+    def get_can_return(self,o):
+        from .services import can_return
+        return can_return(o)
+    class Meta:model=Order;fields=['id','status','subtotal','discount','shipping','total','address','payment_method','pay_with','note','gateway_order_id','created_at','tracking_url','awb','courier_status','tracking_events','cancelled_at','cancel_reason','can_cancel','delivered_at','can_return','return_status','return_reason','return_awb','return_courier_status','items']

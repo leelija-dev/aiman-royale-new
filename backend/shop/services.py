@@ -184,11 +184,16 @@ def can_cancel(order):
     cs=(order.courier_status or '').strip().lower()
     return order.status in ('paid','cod','processing') and not order.pickup_requested_at and (cs in NOT_PICKED or cs.startswith('booking failed'))
 
-def cancel_order(order_id,user,reason=''):
+def cancel_order(order_id,user=None,reason='',by_admin=False):
+    """Cancel in our database, cancel the Delhivery shipment, return stock and refund online payments.
+    Customers: until the parcel is picked up. Admin: any paid / COD / processing order."""
     from . import delhivery
     with transaction.atomic():
-        order=Order.objects.select_for_update().get(pk=order_id,user=user)
-        if not can_cancel(order):raise ValidationError('This order can no longer be cancelled because it has been handed to the courier. Please contact us for help.')
+        q=Order.objects.select_for_update()
+        order=q.get(pk=order_id) if by_admin else q.get(pk=order_id,user=user)
+        if by_admin:
+            if order.status not in ('paid','cod','processing'):raise ValidationError(f'Order is {order.status}; only paid, COD or processing orders can be cancelled.')
+        elif not can_cancel(order):raise ValidationError('This order can no longer be cancelled because it has been handed to the courier. Please contact us for help.')
         if order.awb and order.courier_status!='Cancelled' and delhivery.configured():
             try:delhivery.cancel(order)
             except delhivery.DelhiveryError:raise ValidationError('We could not cancel the courier booking right now. Please try again in a few minutes or contact us.')
@@ -233,3 +238,29 @@ def reserve_custom_order(user,req_id,address,key,method='cashfree'):
     req.status='ordered';req.order=order;req.save(update_fields=['status','order','updated_at'])
     if order.status=='cod':schedule_shipment(order)
     return order,True
+
+
+# ---------- Returns ----------
+def can_return(order):
+    s=SiteSettings.current()
+    if order.status!='delivered' or order.return_status:return False
+    since=order.delivered_at or order.tracking_synced_at or order.created_at
+    return timezone.now()-since<=timedelta(days=s.return_days)
+
+def request_return(order_id,user,reason):
+    with transaction.atomic():
+        order=Order.objects.select_for_update().get(pk=order_id,user=user)
+        if not can_return(order):raise ValidationError('This order is not eligible for return. Returns are accepted within the return window after delivery.')
+        if len(reason.strip())<3:raise ValidationError('Please tell us why you want to return this order.')
+        order.return_status='requested';order.return_reason=reason.strip()[:300];order.return_requested_at=timezone.now()
+        order.save(update_fields=['return_status','return_reason','return_requested_at'])
+    return order
+
+def refund_order(order,note):
+    """Full refund through Cashfree for online payments; COD orders are marked for a manual (bank/UPI) refund."""
+    if order.payment_method!='cod' and order.gateway_payment_id:
+        try:
+            gateway('POST',f'orders/{order.gateway_order_id}/refunds',{'refund_amount':float(order.total),'refund_id':f'refund-{str(order.id)[:8]}','refund_note':note},idempotency_key=f'refund-{order.id}')
+            return 'refunded'
+        except ProviderUnavailable:pass
+    return 'refund_required'

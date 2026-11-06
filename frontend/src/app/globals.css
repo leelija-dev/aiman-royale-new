@@ -1573,3 +1573,7 @@ a.ct-card:hover{border-color:#ec4899}
 .cr-hint{font-size:12px;color:#6b7280;text-align:right;max-width:220px}
 @media(max-width:900px){.cr-card{grid-template-columns:80px 1fr}.cr-measure,.cr-side{grid-column:1/-1}.cr-side{align-items:stretch}.cr-img{width:80px;height:100px}}
 .auth-or{margin-top:2px}
+.ac-return-btn{color:#7c3aed!important;border-color:#ddd6fe!important;background:#f5f3ff!important}
+.ac-return-box{border-color:#ddd6fe;background:#faf8ff}
+.ac-return-status{display:flex;gap:12px;align-items:flex-start;margin:12px 0 0;padding:12px 14px;border-radius:10px;background:#f5f3ff;border:1px solid #ddd6fe;color:#5b21b6}
+.ac-return-status>div{display:grid;gap:2px}.ac-return-status span{font-size:13px;color:#4b5563}

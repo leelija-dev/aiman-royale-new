@@ -52,11 +52,13 @@ USE_TZ=True
 STATIC_URL='/static/'
 STATIC_ROOT=BASE_DIR/'staticfiles'
 MEDIA_URL='/media/'
-MEDIA_ROOT=BASE_DIR/'media'
+MEDIA_ROOT=Path(os.getenv('MEDIA_ROOT') or BASE_DIR/'media')  # set MEDIA_ROOT in .env to keep uploads outside the code folder
 DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
+SERVE_MEDIA=os.getenv('SERVE_MEDIA','true').strip().lower() in ('1','true','yes','on')
 STORAGES={'default':{'BACKEND':'django.core.files.storage.FileSystemStorage'},'staticfiles':{'BACKEND':'whitenoise.storage.CompressedManifestStaticFilesStorage'}}
 if os.getenv('AWS_STORAGE_BUCKET_NAME'):
     STORAGES['default']={'BACKEND':'storages.backends.s3.S3Storage','OPTIONS':{'bucket_name':os.environ['AWS_STORAGE_BUCKET_NAME'],'region_name':os.getenv('AWS_REGION','ap-south-1'),'custom_domain':os.getenv('MEDIA_CDN_DOMAIN') or None,'querystring_auth':False,'default_acl':None,'object_parameters':{'CacheControl':'max-age=31536000, immutable'}}}
+    SERVE_MEDIA=False  # files are on S3 / CDN
 REDIS_URL=os.getenv('REDIS_URL','')
 CACHES={'default': {'BACKEND':'django.core.cache.backends.redis.RedisCache','LOCATION':REDIS_URL}} if REDIS_URL else {'default':{'BACKEND':'django.core.cache.backends.locmem.LocMemCache'}}
 CELERY_BROKER_URL=REDIS_URL or 'redis://localhost:6379/0'
@@ -72,6 +74,9 @@ CSRF_COOKIE_SAMESITE='Lax'
 SESSION_COOKIE_SECURE=not DEBUG
 CSRF_COOKIE_SECURE=not DEBUG
 SECURE_SSL_REDIRECT=not DEBUG
+# Next.js resizes images (/_next/image) by fetching /media/… from Django over plain HTTP inside the server.
+# Redirecting that internal request to https made every uploaded banner/product/collection image fail.
+SECURE_REDIRECT_EXEMPT=[r'^media/']
 SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https')
 SECURE_HSTS_SECONDS=31536000 if not DEBUG else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS=not DEBUG

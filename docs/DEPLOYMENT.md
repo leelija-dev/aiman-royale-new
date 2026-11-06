@@ -68,3 +68,33 @@ Official deployment references:
 - https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 - https://nextjs.org/docs/app/guides/production-checklist
 - https://docs.aws.amazon.com/AmazonECS/latest/developerguide/Welcome.html
+
+## Single VPS (nginx + Next.js + Django, no Docker)
+
+Uploaded images (banners, products, collections…) are stored in `MEDIA_ROOT` (default `backend/media/`;
+set `MEDIA_ROOT=/var/www/aiman/media` in `backend/.env` to keep them outside the code folder). The app
+creates every upload folder (`home/`, `products/`, `collections/`, `menu/`…) automatically at start-up.
+
+Django serves `/media/` itself (`SERVE_MEDIA=true`, the default) so uploads always display. For speed,
+let nginx serve them directly and raise the upload size:
+
+```nginx
+server {
+    server_name sub.aimanroyale.com;
+    client_max_body_size 20m;                      # banner / product photos
+    location /media/  { alias /path/to/aiman-royale-new/backend/media/; expires 7d; access_log off; }
+    location /static/ { alias /path/to/aiman-royale-new/backend/staticfiles/; expires 1y; }
+    location / {
+        proxy_pass http://127.0.0.1:3000;            # Next.js
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+Make sure the user running Django can write to the media folder:
+`sudo chown -R <app-user>:www-data backend/media && sudo chmod -R 775 backend/media`.
+
+`/media/` is exempt from Django's HTTP→HTTPS redirect, because Next.js resizes images (`/_next/image`)
+by fetching them from Django over plain HTTP inside the server.
