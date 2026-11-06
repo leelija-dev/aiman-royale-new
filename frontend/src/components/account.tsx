@@ -3,7 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {useEffect, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
-import {Package, CalendarDays, UserRound, Heart, LogOut, MapPin, Check, CircleAlert, Truck, CreditCard, ArrowRight, X, ShoppingBag, FileDown, XCircle, Copy, Ruler, CreditCard as Card} from 'lucide-react';
+import {Package, CalendarDays, UserRound, Heart, LogOut, MapPin, Check, CircleAlert, Truck, CreditCard, ArrowRight, X, ShoppingBag, FileDown, XCircle, Copy, Ruler, CreditCard as Card, RotateCcw} from 'lucide-react';
 import {api, bagChanged, err} from '@/lib/client';
 import {Order, Product, User, money, photo, discount} from '@/lib/types';
 import {useWishlist} from '@/lib/wishlist';
@@ -24,15 +24,23 @@ function Tracker({status}: {status: string}) {
     <li key={s} className={i < at ? 'done' : i === at ? 'on' : ''}><span>{i <= at && (i < at || status === 'delivered') ? <Check size={13}/> : i + 1}</span>{s}</li>)}</ol>;
 }
 
+const RETURN_LABEL: Record<string, string> = {requested: 'Return requested', pickup_booked: 'Return pickup booked', in_transit: 'Return on its way to us', received: 'Return received', rejected: 'Return not approved'};
+
 function CopyAwb({awb}: {awb: string}) {
   const [done, setDone] = useState(false);
   return <button type="button" className="ac-awb-copy" aria-label="Copy waybill number" onClick={async () => { try { await navigator.clipboard.writeText(awb); setDone(true); setTimeout(() => setDone(false), 1800); } catch {} }}>{done ? <Check size={15}/> : <Copy size={15}/>}</button>;
 }
 
 function OrderCard({o: initial}: {o: FullOrder}) {
+  const [returning, setReturning] = useState(false), [rReason, setRReason] = useState('');
   const [o, setO] = useState(initial), [asking, setAsking] = useState(false), [reason, setReason] = useState(''), [busy, setBusy] = useState(false), [msg, setMsg] = useState('');
   const a = o.address || {};
   const ref = o.id.slice(0, 8).toUpperCase();
+  async function requestReturn() {
+    setBusy(true); setMsg('');
+    try { const d = await api<FullOrder>(`orders/${o.id}/return/`, 'POST', {reason: rReason}); setO({...o, ...d}); setReturning(false); setMsg('Return requested. We’ll confirm and arrange a Delhivery pickup from your address.'); }
+    catch (e) { setMsg(err(e)); } finally { setBusy(false); }
+  }
   async function cancel() {
     setBusy(true); setMsg('');
     try { const d = await api<FullOrder>(`orders/${o.id}/cancel/`, 'POST', {reason}); setO({...o, ...d}); setAsking(false);
@@ -61,9 +69,19 @@ function OrderCard({o: initial}: {o: FullOrder}) {
       <div className="ac-actions">
         {['paid', 'cod', 'processing', 'shipped', 'delivered'].includes(o.status) && <Link className="pd-btn-sm ac-track-btn" href={`/track?order=${ref}`}><Truck size={15}/> Track order</Link>}
         {!['pending', 'expired'].includes(o.status) && <a className="pd-btn-sm ac-inv-btn" href={`/api/orders/${o.id}/invoice/`} download><FileDown size={15}/> Download invoice</a>}
+        {o.can_return && !returning && <button type="button" className="pd-btn-sm ac-return-btn" onClick={() => setReturning(true)}><RotateCcw size={15}/> Return order</button>}
         {o.can_cancel && !asking && <button type="button" className="pd-btn-sm ac-cancel-btn" onClick={() => setAsking(true)}><XCircle size={15}/> Cancel order</button>}
       </div>
       {o.status === 'pending' && <Link className="pd-btn-sm" href={`/payment/return?order=${o.id}`}>Check payment status</Link>}</footer>
+    {returning && <div className="ac-cancel-box ac-return-box" role="group" aria-label="Return this order">
+      <p><strong>Return order #{ref}?</strong> We’ll book a Delhivery pickup from your delivery address once your request is approved. Please keep the outfit unused with its tags.</p>
+      <select value={rReason} onChange={e => setRReason(e.target.value)} aria-label="Reason for return"><option value="">Choose a reason</option>
+        {['Size does not fit', 'Colour or design looks different', 'Damaged or defective item', 'Received the wrong item', 'Quality not as expected', 'Other'].map(r => <option key={r}>{r}</option>)}</select>
+      <div><button type="button" className="pd-btn-sm ac-return-btn" disabled={busy || !rReason} onClick={requestReturn}>{busy ? 'Sending…' : 'Request return'}</button>
+        <button type="button" className="pd-btn-sm" onClick={() => setReturning(false)}>Keep order</button></div></div>}
+    {o.return_status && <div className="ac-return-status"><RotateCcw size={16}/><div><strong>{RETURN_LABEL[o.return_status] || o.return_status}</strong>
+      <span>{o.return_reason}{o.return_awb ? ` · Return AWB ${o.return_awb}` : ''}{o.return_courier_status ? ` · ${o.return_courier_status}` : ''}</span>
+      {o.return_status === 'received' && <span>Refund: {o.status === 'refunded' ? 'started to your original payment method.' : 'our team will contact you for your refund details.'}</span>}</div></div>}
     {asking && <div className="ac-cancel-box" role="group" aria-label="Cancel this order">
       <p><strong>Cancel order #{ref}?</strong> You can cancel until the parcel is picked up by Delhivery.{o.payment_method !== 'cod' ? ' Online payments are refunded to the original payment method.' : ''}</p>
       <select value={reason} onChange={e => setReason(e.target.value)} aria-label="Reason for cancelling"><option value="">Reason (optional)</option>

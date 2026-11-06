@@ -689,3 +689,11 @@ def custom_request_cancel(request,pk):
     if r.status not in ('requested','accepted'):raise ValidationError('This request can no longer be cancelled.')
     r.status='cancelled';r.save(update_fields=['status','updated_at'])
     return Response(custom_data(r))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def order_return(request,ref):
+    o=own_order(request,ref)
+    o=request_return(o.pk,request.user,str(request.data.get('reason','') or ''))
+    return Response(OrderSerializer(o).data)

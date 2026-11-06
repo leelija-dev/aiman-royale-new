@@ -29,11 +29,14 @@ class ItemInline(admin.TabularInline):
     def has_add_permission(self,*args):return False
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_filter=['status','courier_status'];inlines=[ItemInline]
-    list_display=['id','user','status','total','awb','courier_status','created_at'];search_fields=['id','user__email','gateway_payment_id','awb']
-    readonly_fields=['id','user','idempotency_key','status','cancelled_at','cancel_reason','note','pay_with','subtotal','discount','shipping','total','address','payment_method','gateway_order_id','payment_session_id','gateway_payment_id','created_at','expires_at','courier_status','tracking_view','tracking_synced_at']
+    # Every order, newest first, with filters by status, payment, returns and date.
+    list_filter=['status','payment_method','return_status','created_at','courier_status'];inlines=[ItemInline];date_hierarchy='created_at';list_per_page=50
+    list_display=['ref','created_at','customer','phone','items_summary','total','payment','status','awb','courier_status','return_status']
+    list_display_links=['ref'];list_select_related=['user']
+    search_fields=['id','user__email','user__first_name','user__last_name','gateway_payment_id','awb','return_awb','address__phone','address__name']
+    readonly_fields=['id','user','idempotency_key','status','cancelled_at','cancel_reason','note','pay_with','subtotal','discount','shipping','total','address','payment_method','gateway_order_id','payment_session_id','gateway_payment_id','created_at','expires_at','courier_status','tracking_view','tracking_synced_at','delivered_at','return_status','return_reason','return_requested_at','return_awb','return_courier_status']
     exclude=['tracking_events']
-    actions=['download_invoice','mark_processing','mark_shipped','mark_delivered','delhivery_create','delhivery_track','delhivery_slip','delhivery_pickup','delhivery_cancel']
+    actions=['export_csv','download_invoice','admin_cancel','return_approve','return_received','return_reject','mark_processing','mark_shipped','mark_delivered','delhivery_create','delhivery_track','delhivery_slip','delhivery_pickup','delhivery_cancel']
     @admin.action(description='Download invoice (PDF, first selected order)')
     def download_invoice(self,request,q):
         from django.http import HttpResponse
@@ -94,7 +97,57 @@ class OrderAdmin(admin.ModelAdmin):
     @admin.action(description='Mark processing orders shipped (set tracking URL first)')
     def mark_shipped(self,request,q):q.filter(status='processing').exclude(tracking_url='').update(status='shipped')
     @admin.action(description='Mark shipped orders delivered')
-    def mark_delivered(self,request,q):q.filter(status='shipped').update(status='delivered')
+    def mark_delivered(self,request,q):
+        from django.utils import timezone
+        q.filter(status='shipped').update(status='delivered',delivered_at=timezone.now())
+    def get_queryset(self,request):return super().get_queryset(request).prefetch_related('items')
+    @admin.display(description='Order',ordering='created_at')
+    def ref(self,o):return '#'+str(o.id)[:8].upper()
+    @admin.display(description='Customer',ordering='user__email')
+    def customer(self,o):return (o.address or {}).get('name') or o.user.get_full_name() or o.user.email
+    @admin.display(description='Phone')
+    def phone(self,o):return (o.address or {}).get('phone','')
+    @admin.display(description='Items')
+    def items_summary(self,o):
+        it=list(o.items.all());return ', '.join(f'{i.name} ×{i.quantity}' for i in it[:2])+(f' +{len(it)-2} more' if len(it)>2 else '')
+    @admin.display(description='Payment',ordering='payment_method')
+    def payment(self,o):return 'COD' if o.payment_method=='cod' else 'Online'+(f' · {o.pay_with.upper()}' if o.pay_with else '')
+    @admin.action(description='Export selected orders to CSV')
+    def export_csv(self,request,q):
+        import csv
+        from django.http import HttpResponse
+        r=HttpResponse(content_type='text/csv');r['Content-Disposition']='attachment; filename="orders.csv"'
+        w=csv.writer(r);w.writerow(['Order','Date','Customer','Email','Phone','City','PIN','Items','Subtotal','Discount','Shipping','Total','Payment','Status','AWB','Courier status','Return'])
+        for o in q.prefetch_related('items').select_related('user'):
+            a=o.address or {}
+            w.writerow(['#'+str(o.id)[:8].upper(),o.created_at.strftime('%Y-%m-%d %H:%M'),a.get('name',''),a.get('email') or o.user.email,a.get('phone',''),a.get('city',''),a.get('pincode',''),
+                        '; '.join(f'{i.name} x{i.quantity}' for i in o.items.all()),o.subtotal,o.discount,o.shipping,o.total,self.payment(o),o.status,o.awb,o.courier_status,o.get_return_status_display() if o.return_status else ''])
+        return r
+    @admin.action(description='Cancel order (also cancels the Delhivery shipment and refunds online payments)')
+    def admin_cancel(self,request,q):
+        from django.contrib import messages
+        from rest_framework.exceptions import ValidationError as APIError
+        from .services import cancel_order
+        done=0
+        for o in q:
+            try:cancel_order(o.pk,reason='Cancelled by store',by_admin=True);done+=1
+            except APIError as e:self.message_user(request,f'#{str(o.id)[:8].upper()}: {e.detail[0] if isinstance(e.detail,list) else e.detail}',messages.ERROR)
+        if done:self.message_user(request,f'{done} order(s) cancelled.',messages.SUCCESS)
+    @admin.action(description='Return: approve and book Delhivery reverse pickup')
+    def return_approve(self,request,q):
+        from . import delhivery
+        self._each(request,q.filter(status='delivered').exclude(return_status__in=['received','rejected']),delhivery.create_return,'Reverse pickup booked for {} order(s).')
+    @admin.action(description='Return: parcel received — refund the customer')
+    def return_received(self,request,q):
+        from django.contrib import messages
+        from .services import refund_order
+        n=0
+        for o in q.filter(status='delivered').exclude(return_status__in=['','rejected','received']):
+            o.status=refund_order(o,'Return received');o.return_status='received';o.save(update_fields=['status','return_status']);n+=1
+        self.message_user(request,f'{n} return(s) received. Online payments are refunded through Cashfree; COD orders are marked "refund_required" for a manual refund.',messages.SUCCESS)
+    @admin.action(description='Return: reject request')
+    def return_reject(self,request,q):
+        n=q.filter(return_status='requested').update(return_status='rejected');self.message_user(request,f'{n} return request(s) rejected.')
     def has_add_permission(self,*args):return False
     def has_delete_permission(self,*args):return False
 @admin.register(Appointment)
@@ -212,3 +265,28 @@ class CustomRequestAdmin(admin.ModelAdmin):
             m=c.measurements or {}
             w.writerow([f'#{c.pk:06d}',c.created_at.strftime('%Y-%m-%d %H:%M'),c.user.get_full_name(),c.user.email,c.product.name,c.colour,m.get('bust'),m.get('waist'),m.get('hip'),m.get('armhole'),m.get('unit'),c.quantity,c.price or '',c.get_status_display(),c.note])
         return r
+
+
+@admin.register(ShippingLabel)
+class ShippingLabelAdmin(admin.ModelAdmin):
+    """Download a Delhivery shipping label by entering one or more waybill (AWB) numbers."""
+    def has_add_permission(self,request):return False
+    def has_delete_permission(self,request,obj=None):return False
+    def has_change_permission(self,request,obj=None):return request.user.is_staff
+    def changelist_view(self,request,extra_context=None):
+        import re as _re
+        from django.contrib import messages
+        from django.shortcuts import redirect
+        from django.template.response import TemplateResponse
+        from . import delhivery
+        awbs=_re.findall(r'\d{6,20}',request.GET.get('awb',''))[:25]
+        recent=Order.objects.exclude(awb='').order_by('-created_at')[:15]
+        ctx={**self.admin_site.each_context(request),'title':'Download shipping label','opts':self.model._meta,'awb':request.GET.get('awb',''),'recent':recent,'packages':[]}
+        if awbs:
+            try:
+                slip=delhivery.packing_slip(awbs)
+                if len(slip['links'])==1 and len(awbs)==1:return redirect(slip['links'][0])
+                ctx['links']=slip['links'];ctx['packages']=slip['packages']
+                if not slip['links'] and not slip['packages']:messages.warning(request,'Delhivery returned no label for these waybill numbers.')
+            except delhivery.DelhiveryError as e:messages.error(request,str(e))
+        return TemplateResponse(request,'admin/shop/shipping_label.html',ctx)

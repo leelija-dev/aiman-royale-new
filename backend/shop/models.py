@@ -12,6 +12,7 @@ class Customer(AbstractUser):
 class SiteSettings(models.Model):
     name=models.CharField(max_length=80,default='Aiman Royale')
     gstin=models.CharField('GSTIN (printed on invoices)',max_length=20,blank=True)
+    return_days=models.PositiveSmallIntegerField('Return window (days after delivery)',default=7)
     announcement=models.CharField(max_length=180,default='New Arrivals Just In | Enjoy Up to 70% OFF')
     hero_title=models.CharField(max_length=180,default='Shop Luxury\nCrafted For You')
     hero_description=models.CharField(max_length=240,default='Designer ethnic wear for every celebration. Find your style, make it yours.')
@@ -232,6 +233,14 @@ class Order(models.Model):
     pickup_requested_at=models.DateTimeField(null=True,blank=True,help_text='Set when a Delhivery pickup is requested. Customers cannot cancel after this.')
     cancelled_at=models.DateTimeField(null=True,blank=True)
     cancel_reason=models.CharField(max_length=200,blank=True)
+    delivered_at=models.DateTimeField(null=True,blank=True)
+    # Returns (Delhivery reverse pickup)
+    RETURN_STATUSES=[('','—'),('requested','Return requested'),('pickup_booked','Reverse pickup booked'),('in_transit','Return in transit'),('received','Return received'),('rejected','Return rejected')]
+    return_status=models.CharField(max_length=16,blank=True,choices=RETURN_STATUSES)
+    return_reason=models.CharField(max_length=300,blank=True)
+    return_requested_at=models.DateTimeField(null=True,blank=True)
+    return_awb=models.CharField('Return AWB (reverse pickup)',max_length=40,blank=True,db_index=True)
+    return_courier_status=models.CharField(max_length=80,blank=True)
     class Meta:ordering=['-created_at']
 
 class OrderItem(models.Model):
@@ -440,3 +449,8 @@ class CustomRequest(models.Model):
     def clean(self):
         from django.core.exceptions import ValidationError as VE
         if self.status=='accepted' and not self.price:raise VE({'price':'Set the price before accepting the request.'})
+
+
+class ShippingLabel(Order):
+    """Admin tool: download a Delhivery shipping label by waybill number."""
+    class Meta:proxy=True;verbose_name='Shipping label';verbose_name_plural='Shipping labels (by AWB)'

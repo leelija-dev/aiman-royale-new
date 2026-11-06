@@ -76,7 +76,7 @@ def pincode(pin):
 
 
 # ---------- Create shipment ----------
-def shipment_payload(order):
+def shipment_payload(order, reverse=False):
     a = order.address or {}
     items = list(order.items.all())
     qty = sum(i.quantity for i in items) or 1
@@ -86,8 +86,8 @@ def shipment_payload(order):
             'name': a.get('name', ''), 'add': ', '.join(x for x in [a.get('line1', ''), a.get('line2', '')] if x),
             'pin': a.get('pincode', ''), 'city': a.get('city', ''), 'state': a.get('state', ''), 'country': 'India',
             'phone': ''.join(ch for ch in a.get('phone', '') if ch.isdigit())[-10:],
-            'order': str(order.id).split('-')[0].upper(), 'order_date': order.created_at.isoformat(),
-            'payment_mode': 'COD' if cod else 'Prepaid', 'cod_amount': str(order.total) if cod else '0',
+            'order': str(order.id).split('-')[0].upper() + ('-R' if reverse else ''), 'order_date': order.created_at.isoformat(),
+            'payment_mode': 'Pickup' if reverse else ('COD' if cod else 'Prepaid'), 'cod_amount': str(order.total) if cod and not reverse else '0',
             'total_amount': str(order.total), 'products_desc': ', '.join(i.name for i in items)[:200] or 'Apparel',
             'quantity': str(qty), 'weight': str(settings.DELHIVERY_WEIGHT_GRAMS * qty),
             'shipping_mode': settings.DELHIVERY_SHIPPING_MODE, 'seller_name': 'Aiman Royale',
@@ -145,9 +145,10 @@ def track(order):
     s = order.courier_status.lower()
     if s in DELIVERED and order.status in ('processing', 'shipped'):
         order.status = 'delivered'
+        order.delivered_at = order.delivered_at or timezone.now()
     elif (s in MOVING or 'transit' in s) and order.status == 'processing' and s != 'manifested':
         order.status = 'shipped'
-    order.save(update_fields=['courier_status', 'tracking_events', 'tracking_synced_at', 'status'])
+    order.save(update_fields=['courier_status', 'tracking_events', 'tracking_synced_at', 'status', 'delivered_at'])
     return order.courier_status
 
 
@@ -179,3 +180,42 @@ def cancel(order):
     order.courier_status = 'Cancelled'
     order.save(update_fields=['courier_status'])
     return body
+
+
+# ---------- Returns: reverse pickup from the customer back to our warehouse ----------
+def create_return(order):
+    """Book a Delhivery reverse pickup (payment mode 'Pickup') for a delivered order. Returns the return AWB."""
+    if order.return_awb:
+        return order.return_awb
+    if order.status != 'delivered':
+        raise DelhiveryError('Only delivered orders can be picked up for return.')
+    if not settings.DELHIVERY_PICKUP_LOCATION:
+        raise DelhiveryError('Add DELHIVERY_PICKUP_LOCATION to backend/.env.')
+    data = 'format=json&data=' + json.dumps(shipment_payload(order, reverse=True))
+    body = _call('POST', '/api/cmu/create.json', data=data.encode(), timeout=30)
+    pkg = (body.get('packages') or [{}])[0]
+    awb = str(pkg.get('waybill') or '')
+    if not awb or str(pkg.get('status', '')).lower() == 'fail':
+        raise DelhiveryError(_message(pkg) or _message(body) or 'Delhivery did not return a waybill for the return.')
+    order.return_awb = awb
+    order.return_status = 'pickup_booked'
+    order.return_courier_status = 'Pickup scheduled'
+    order.save(update_fields=['return_awb', 'return_status', 'return_courier_status'])
+    return awb
+
+
+def track_return(order):
+    body = _call('GET', '/api/v1/packages/json/', params={'waybill': order.return_awb})
+    ship = ((body.get('ShipmentData') or [{}])[0]).get('Shipment') or {}
+    st = (ship.get('Status') or {}).get('Status', '') or order.return_courier_status
+    order.return_courier_status = st
+    low = st.lower()
+    if order.return_status == 'pickup_booked' and ('transit' in low or 'picked' in low or 'dispatched' in low):
+        order.return_status = 'in_transit'
+    order.save(update_fields=['return_courier_status', 'return_status'])
+    return st
+
+
+def label_data(awbs):
+    """Packing slip data for printing labels: PDF links when Delhivery provides them, else the package details."""
+    return packing_slip(awbs)
