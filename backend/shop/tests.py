@@ -625,3 +625,17 @@ class LiveIssuesTests(TestCase):
         self.assertEqual(r.status_code,302);self.assertEqual(r['Location'],'https://example.com/label.pdf')
         with patch('shop.delhivery.requests.request',return_value=FakeResponse({'packages':[{'wbn':'5627861000183','name':'Lata','pin':'700001'}]})):
             self.assertContains(self.a.get('/admin/shop/shippinglabel/',{'awb':'5627861000183'}),'Print labels')
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'],INTERNAL_API_TOKEN='internal-test-token')
+class ThrottleTests(TestCase):
+    def setUp(self):cache.clear()
+    def test_visitor_limited_but_site_server_not(self):
+        from rest_framework.throttling import AnonRateThrottle
+        with patch.object(AnonRateThrottle,'THROTTLE_RATES',{'anon':'3/min','user':'360/min','auth':'10/min'}):
+            c=APIClient()
+            codes=[c.get('/api/site/').status_code for _ in range(5)]
+            self.assertEqual(codes[:3],[200,200,200]);self.assertEqual(codes[-1],429)
+            # the Next.js server (page renders, prefetches) is never limited
+            self.assertTrue(all(c.get('/api/site/',HTTP_X_INTERNAL_TOKEN='internal-test-token').status_code==200 for _ in range(10)))
+            self.assertEqual(c.get('/api/site/',HTTP_X_INTERNAL_TOKEN='wrong').status_code,429)

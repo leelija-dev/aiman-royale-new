@@ -35,6 +35,12 @@ services:
     restart: unless-stopped
   backend:
     <<: *backend
+    # On every start: apply database migrations, refresh the shared static volume (it keeps old files
+    # after a rebuild otherwise), then start the web server. Worker/beat start after it is healthy.
+    command: >-
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 45 --access-logfile -"
   worker:
     <<: *backend
     command: celery -A config worker --loglevel=info --concurrency=2

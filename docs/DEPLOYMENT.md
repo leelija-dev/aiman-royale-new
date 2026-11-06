@@ -69,7 +69,44 @@ Official deployment references:
 - https://nextjs.org/docs/app/guides/production-checklist
 - https://docs.aws.amazon.com/AmazonECS/latest/developerguide/Welcome.html
 
-## Single VPS (nginx + Next.js + Django, no Docker)
+## VPS with Docker Compose (sub.aimanroyale.com)
+
+Update and redeploy:
+
+```bash
+cd /path/to/aiman-royale-new
+git pull
+docker compose build
+docker compose up -d          # backend applies migrations + collectstatic automatically on start
+docker compose logs -f backend --tail=50
+```
+
+Uploaded images live in the `media` Docker volume (mounted at `/app/media` in backend/worker/beat and
+read-only at `/srv/media` in the `web` nginx container). The backend creates every upload folder
+(`home/`, `products/`, `collections/`, `menu/`…) on start and serves `/media/` itself, so the Next.js image
+resizer (`/_next/image`, which fetches `http://backend:8000/media/…` inside Docker) always finds the files.
+`/media/` is exempt from the HTTP→HTTPS redirect for that internal request.
+
+If uploads fail with a permission error, fix the volume owner once:
+`docker compose exec -u root backend chown -R app:app /app/media`
+
+The `web` container listens on `127.0.0.1:8080`. In the host's nginx (or other proxy) that terminates HTTPS
+for sub.aimanroyale.com, allow larger photos — nginx refuses uploads over 1 MB by default:
+
+```nginx
+server {
+    server_name sub.aimanroyale.com;
+    client_max_body_size 20m;
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+## Single VPS without Docker
 
 Uploaded images (banners, products, collections…) are stored in `MEDIA_ROOT` (default `backend/media/`;
 set `MEDIA_ROOT=/var/www/aiman/media` in `backend/.env` to keep them outside the code folder). The app

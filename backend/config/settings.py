@@ -64,7 +64,7 @@ CACHES={'default': {'BACKEND':'django.core.cache.backends.redis.RedisCache','LOC
 CELERY_BROKER_URL=REDIS_URL or 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND=CELERY_BROKER_URL
 CELERY_BEAT_SCHEDULE={'expire-unpaid-orders':{'task':'shop.tasks.expire_orders','schedule':60.0},'sync-delhivery-tracking':{'task':'shop.tasks.sync_shipments','schedule':1800.0}}
-REST_FRAMEWORK={'DEFAULT_AUTHENTICATION_CLASSES':['rest_framework.authentication.SessionAuthentication'],'DEFAULT_PERMISSION_CLASSES':['rest_framework.permissions.AllowAny'],'DEFAULT_THROTTLE_CLASSES':['rest_framework.throttling.AnonRateThrottle','rest_framework.throttling.UserRateThrottle'],'DEFAULT_THROTTLE_RATES':{'anon':'180/min','user':'360/min','auth':'10/min'},'EXCEPTION_HANDLER':'shop.api.exception_handler'}
+REST_FRAMEWORK={'DEFAULT_AUTHENTICATION_CLASSES':['rest_framework.authentication.SessionAuthentication'],'DEFAULT_PERMISSION_CLASSES':['rest_framework.permissions.AllowAny'],'DEFAULT_THROTTLE_CLASSES':['shop.throttles.VisitorAnonThrottle','shop.throttles.VisitorUserThrottle'],'DEFAULT_THROTTLE_RATES':{'anon':'180/min','user':'360/min','auth':'10/min'},'EXCEPTION_HANDLER':'shop.api.exception_handler'}
 CSRF_TRUSTED_ORIGINS=os.getenv('CSRF_TRUSTED_ORIGINS','http://localhost:3000,http://localhost:8080').split(',')
 SESSION_COOKIE_HTTPONLY=True
 ADMIN_SESSION_COOKIE_NAME='admin_sessionid'  # admin login is kept separate from the customer login
@@ -77,6 +77,11 @@ SECURE_SSL_REDIRECT=not DEBUG
 # Next.js resizes images (/_next/image) by fetching /media/… from Django over plain HTTP inside the server.
 # Redirecting that internal request to https made every uploaded banner/product/collection image fail.
 SECURE_REDIRECT_EXEMPT=[r'^media/']
+# Token sent by the Next.js server on its own API requests (page renders, prefetches) so they are not
+# rate-limited as one "visitor". Defaults to a value derived from DJANGO_SECRET_KEY, which the frontend
+# container also receives from .env; set INTERNAL_API_TOKEN in .env to use your own.
+import hashlib as _hl
+INTERNAL_API_TOKEN=os.getenv('INTERNAL_API_TOKEN','').strip() or _hl.sha256(('aiman-internal:'+SECRET_KEY).encode()).hexdigest()
 SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https')
 SECURE_HSTS_SECONDS=31536000 if not DEBUG else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS=not DEBUG
