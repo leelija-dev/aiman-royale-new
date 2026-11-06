@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import {AccountMenu} from '@/components/account-menu';
 import {useEffect, useState} from 'react';
 import {usePathname} from 'next/navigation';
 import {Search, Heart, ShoppingBag, UserRound, Menu, X, CalendarDays, ArrowRight, MessageCircle, ChevronDown, Phone, Mail, MapPin, Check, Banknote, Truck, ShieldCheck, CreditCard, Package, RotateCcw, Lock} from 'lucide-react';
@@ -27,7 +28,7 @@ export function Header({site}: {site: Site}) {
       <div className="header-actions">
         <Link href="/appointment" className="appointment-link"><CalendarDays size={15}/> Book Appointment</Link>
         <button aria-label="Search" className="icon" onClick={() => setSearch(!search)}><Search/></button>
-        <Link href="/account?tab=profile" className="icon hide-xs" aria-label="My account"><UserRound/></Link>
+        <AccountMenu/>
         <Link href="/wishlist" className="icon count-icon" aria-label={`Wishlist, ${saved} saved`}><Heart/>{saved > 0 && <b className="count-badge wish">{badge(saved)}</b>}</Link>
         <Link href="/cart" className="icon count-icon" aria-label={`Shopping bag, ${count} items`}><ShoppingBag/>{count > 0 && <b className="count-badge">{badge(count)}</b>}</Link>
       </div>

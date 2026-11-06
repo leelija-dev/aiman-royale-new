@@ -7,3 +7,11 @@ export async function api<T=Record<string,unknown>>(path:string,method='GET',bod
 }
 export const err=(e:unknown)=>e instanceof Error?e.message:'Please try again.';
 export function bagChanged(){window.dispatchEvent(new Event('bag-changed'));}
+/** Sign-in state or profile photo changed (header account menu refreshes). */
+export function authChanged(){window.dispatchEvent(new Event('auth-changed'));}
+/** File upload (multipart form) to the API, with the CSRF token. */
+export async function upload<T=Record<string,unknown>>(path:string,form:FormData):Promise<T>{
+ const c=await fetch('/api/csrf/',{credentials:'same-origin',cache:'no-store'});if(!c.ok)throw Error('Unable to start a secure session. Please refresh.');
+ const r=await fetch(`/api/${path}`,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'X-CSRFToken':(await c.json()).csrfToken},body:form});
+ const data=await r.json().catch(()=>({error:'Service unavailable. Please try again.'}));if(!r.ok)throw Error(message(data));return data;
+}

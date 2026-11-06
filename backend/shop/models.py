@@ -8,6 +8,8 @@ from django.conf import settings
 class Customer(AbstractUser):
     phone=models.CharField(max_length=16,unique=True,null=True,blank=True)
     marketing_opt_in=models.BooleanField(default=False)
+    avatar=models.ImageField('Profile photo',upload_to='avatars/',blank=True)
+    avatar_url=models.URLField('Photo from Google',max_length=500,blank=True)
 
 class SiteSettings(models.Model):
     name=models.CharField(max_length=80,default='Aiman Royale')

@@ -11,7 +11,7 @@ export type Facets={occasions:Occasion[];sizes:string[];colours:{name:string;hex
 export type ShopPage={eyebrow:string;title:string;text:string;image:string;heading:string;subheading:string;fitting:{title:string;text:string;note:string;image:string};trust:{title:string;text:string}[]};
 export type CartItem={id:number;variant:Variant;product:Product;quantity:number;measurements:Record<string,string>};
 export type Bag={items:CartItem[];subtotal:string};
-export type User={id:number;name:string;email:string;phone:string|null;first_name?:string;last_name?:string;marketing_opt_in?:boolean;joined?:string};
+export type User={id:number;avatar?:string;name:string;email:string;phone:string|null;first_name?:string;last_name?:string;marketing_opt_in?:boolean;joined?:string};
 export type Order={id:string;status:string;note?:string;pay_with?:string;subtotal:string;discount:string;shipping:string;total:string;gateway_order_id:string;tracking_url:string;awb?:string;courier_status?:string;tracking_events?:{time:string;status:string;detail:string;location:string}[];can_cancel?:boolean;can_return?:boolean;delivered_at?:string|null;return_status?:string;return_reason?:string;return_awb?:string;return_courier_status?:string;cancelled_at?:string|null;cancel_reason?:string;created_at:string;items:{name:string;unit_price:string;quantity:number;size:string;colour:string;slug?:string;image?:string}[]};
 /** ₹ in whole rupees (₹13,419.39 → ₹13,419) — the same amount the payment page charges. */
 export const money=(n:string|number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(Math.round(Number(n)));
