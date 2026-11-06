@@ -87,6 +87,11 @@ read-only at `/srv/media` in the `web` nginx container). The backend creates eve
 resizer (`/_next/image`, which fetches `http://backend:8000/media/…` inside Docker) always finds the files.
 `/media/` is exempt from the HTTP→HTTPS redirect for that internal request.
 
+After a deploy the `web` (nginx) container finds the rebuilt backend/frontend containers by name on every
+request (Docker DNS, `resolver 127.0.0.11` in `deploy/nginx.conf`), so it never keeps sending traffic to an old
+container address. If you ever see **502 Bad Gateway** on `/admin/` or "Unable to start a secure session" while
+pages still load, run `docker compose restart web`.
+
 If uploads fail with a permission error, fix the volume owner once:
 `docker compose exec -u root backend chown -R app:app /app/media`
 
