@@ -34,7 +34,7 @@ class AuthThrottle(SimpleRateThrottle):
 
 @ensure_csrf_cookie
 def csrf(request):return JsonResponse({'csrfToken':get_token(request)})
-def user_data(u):return {'id':u.pk,'name':u.get_full_name() or u.first_name,'first_name':u.first_name,'last_name':u.last_name,'email':u.email,'phone':u.phone,'marketing_opt_in':u.marketing_opt_in,'joined':u.date_joined.date().isoformat()}
+def user_data(u):return {'id':u.pk,'avatar':(u.avatar.url if u.avatar else u.avatar_url),'name':u.get_full_name() or u.first_name,'first_name':u.first_name,'last_name':u.last_name,'email':u.email,'phone':u.phone,'marketing_opt_in':u.marketing_opt_in,'joined':u.date_joined.date().isoformat()}
 def get_cart(request):
     if request.user.is_authenticated:return Cart.objects.get_or_create(user=request.user)[0]
     if not request.session.session_key:request.session.create()
@@ -616,6 +616,8 @@ def google_callback(request):
     if not u:
         u=Customer(username=email,email=email,first_name=str(info.get('given_name') or info.get('name') or '')[:150],last_name=str(info.get('family_name') or '')[:150])
         u.set_unusable_password();u.save()
+    pic=str(info.get('picture') or '')
+    if pic.startswith('https://') and not u.avatar and u.avatar_url!=pic[:500]:u.avatar_url=pic[:500];u.save(update_fields=['avatar_url'])
     old=request.session.session_key;login(request,u,backend='django.contrib.auth.backends.ModelBackend');merge_cart(request,old)
     return HttpResponseRedirect(nxt)
 
@@ -697,3 +699,27 @@ def order_return(request,ref):
     o=own_order(request,ref)
     o=request_return(o.pk,request.user,str(request.data.get('reason','') or ''))
     return Response(OrderSerializer(o).data)
+
+
+AVATAR_TYPES={'image/jpeg','image/png','image/webp'}
+@api_view(['POST','DELETE'])
+@permission_classes([IsAuthenticated])
+def avatar(request):
+    """Upload (POST, form field 'photo', JPG/PNG/WebP up to 3 MB) or remove (DELETE) the profile photo."""
+    u=request.user
+    if request.method=='DELETE':
+        if u.avatar:u.avatar.delete(save=False)
+        u.avatar='';u.avatar_url='';u.save(update_fields=['avatar','avatar_url'])
+        return Response({'user':user_data(u)})
+    f=request.FILES.get('photo')
+    if not f:raise ValidationError('Choose a photo to upload.')
+    if f.content_type not in AVATAR_TYPES or f.size>3*1024*1024:raise ValidationError('Please upload a JPG, PNG or WebP photo up to 3 MB.')
+    try:
+        from PIL import Image
+        img=Image.open(f);img.verify();f.seek(0)
+    except Exception:raise ValidationError('This file is not a valid image.')
+    old=u.avatar.name if u.avatar else ''
+    u.avatar.save(f'{u.pk}-{secrets.token_hex(4)}.{f.content_type.split("/")[1].replace("jpeg","jpg")}',f,save=False)
+    u.save(update_fields=['avatar'])
+    if old:u.avatar.storage.delete(old)
+    return Response({'user':user_data(u)})

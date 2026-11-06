@@ -639,3 +639,21 @@ class ThrottleTests(TestCase):
             # the Next.js server (page renders, prefetches) is never limited
             self.assertTrue(all(c.get('/api/site/',HTTP_X_INTERNAL_TOKEN='internal-test-token').status_code==200 for _ in range(10)))
             self.assertEqual(c.get('/api/site/',HTTP_X_INTERNAL_TOKEN='wrong').status_code,429)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'])
+class AvatarTests(TestCase):
+    def test_upload_and_remove_photo(self):
+        import io,tempfile
+        from PIL import Image
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        u=Customer.objects.create_user(username='p@example.com',email='p@example.com',password='Test-Password-910!',first_name='Priya')
+        c=APIClient();c.force_login(u)
+        self.assertEqual(c.get('/api/auth/me/').data['user']['avatar'],'')
+        buf=io.BytesIO();Image.new('RGB',(20,20),'red').save(buf,'PNG')
+        with tempfile.TemporaryDirectory() as d, override_settings(MEDIA_ROOT=d):
+            r=c.post('/api/auth/avatar/',{'photo':SimpleUploadedFile('me.png',buf.getvalue(),'image/png')},format='multipart')
+            self.assertEqual(r.status_code,200);self.assertTrue(r.data['user']['avatar'].startswith('/media/avatars/'))
+            bad=c.post('/api/auth/avatar/',{'photo':SimpleUploadedFile('x.png',b'not an image','image/png')},format='multipart');self.assertEqual(bad.status_code,400)
+            self.assertEqual(c.delete('/api/auth/avatar/').data['user']['avatar'],'')
+        self.assertEqual(APIClient().post('/api/auth/avatar/',{},format='multipart').status_code,403)

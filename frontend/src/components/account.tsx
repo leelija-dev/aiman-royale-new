@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {useEffect, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {Package, CalendarDays, UserRound, Heart, LogOut, MapPin, Check, CircleAlert, Truck, CreditCard, ArrowRight, X, ShoppingBag, FileDown, XCircle, Copy, Ruler, CreditCard as Card, RotateCcw} from 'lucide-react';
-import {api, bagChanged, err} from '@/lib/client';
+import {api, upload, authChanged, bagChanged, err} from '@/lib/client';
 import {Order, Product, User, money, photo, discount} from '@/lib/types';
 import {useWishlist} from '@/lib/wishlist';
 
@@ -147,7 +147,7 @@ export function AccountPage({section}: {section?: 'orders'}) {
     }).catch(e => setError(err(e)));
   }, [router]);
   const go = (t: string) => t === 'orders' ? router.push('/account/orders') : section ? router.push(`/account?tab=${t}`) : router.replace(`/account?tab=${t}`, {scroll: false});
-  async function signOut() { try { await api('auth/logout/', 'POST', {}); bagChanged(); router.push('/'); router.refresh(); } catch (e) { setError(err(e)); } }
+  async function signOut() { try { await api('auth/logout/', 'POST', {}); bagChanged(); authChanged(); router.push('/'); router.refresh(); } catch (e) { setError(err(e)); } }
 
   if (!user) return <section className="ac-page"><p className="ac-loading">{error || 'Loading your account…'}</p></section>;
   const tabs: [string, string, React.ReactNode, number?][] = [['profile', 'Profile Settings', <UserRound key="p" size={18}/>], ['orders', 'Order History', <Package key="o" size={18}/>, orders?.length], ['appointments', 'Appointments', <CalendarDays key="a" size={18}/>, appts?.length], ['custom', 'Custom Requests', <Ruler key="c" size={18}/>]];
@@ -169,7 +169,7 @@ export function AccountPage({section}: {section?: 'orders'}) {
         ? <div className="ac-empty"><CalendarDays size={34}/><p>No appointments yet.</p><Link href="/appointment" className="pd-btn pd-btn-bag">Book a fitting</Link></div>
         : appts.map(a => <article key={a.id} className="ac-appt"><div><strong>{a.session_type === 'fitting' ? 'Fitting & Measurements' : 'Style Consultation'}</strong><small>{a.starts_at ? fmtDate(a.starts_at, true) : 'Date & time in your Calendly confirmation email'} · {a.mode === 'video' ? 'Video consultation' : 'At the studio'}{a.occasion ? ` · ${a.occasion}` : ''}</small>{a.location && (/^https?:/.test(a.location) ? <a className="underlink" href={a.location} target="_blank" rel="noopener noreferrer">Join video call</a> : <small>{a.location}</small>)}</div><span className={`ac-pill ${a.status}`}>{a.status}</span></article>)}</>}
       {tab === 'custom' && <><h2>Custom Requests</h2><CustomRequests/></>}
-      {tab === 'profile' && <><h2>Profile Settings</h2><Profile user={user} onSaved={setUser}/></>}
+      {tab === 'profile' && <><h2>Profile Settings</h2><ProfilePhoto user={user} onSaved={setUser}/><Profile user={user} onSaved={setUser}/></>}
     </div>
   </section>;
 }
@@ -230,4 +230,31 @@ function CustomRequests() {
       {r.status === 'requested' && <small className="cr-hint">We’ll confirm the price by email.</small>}
       {r.admin_note && <small className="cr-hint">“{r.admin_note}”</small>}</div>
   </article>; })}</div>;
+}
+
+
+/* ---------- Profile photo (shown in the header menu) ---------- */
+function ProfilePhoto({user, onSaved}: {user: User; onSaved: (u: User) => void}) {
+  const [busy, setBusy] = useState(false), [msg, setMsg] = useState<{ok: boolean; text: string} | null>(null);
+  const initial = (user.first_name || user.name || user.email || '?').trim()[0]?.toUpperCase();
+  async function pick(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; e.target.value = '';
+    if (!f) return;
+    if (f.size > 3 * 1024 * 1024) return setMsg({ok: false, text: 'Please choose a photo up to 3 MB.'});
+    setBusy(true); setMsg(null);
+    try { const fd = new FormData(); fd.append('photo', f); const r = await upload<{user: User}>('auth/avatar/', fd); onSaved(r.user); authChanged(); setMsg({ok: true, text: 'Profile photo updated.'}); }
+    catch (e2) { setMsg({ok: false, text: err(e2)}); } finally { setBusy(false); }
+  }
+  async function remove() {
+    setBusy(true); setMsg(null);
+    try { const r = await api<{user: User}>('auth/avatar/', 'DELETE'); onSaved(r.user); authChanged(); setMsg({ok: true, text: 'Profile photo removed.'}); }
+    catch (e2) { setMsg({ok: false, text: err(e2)}); } finally { setBusy(false); }
+  }
+  return <div className="ac-photo">
+    <span className="ac-photo-img">{user.avatar ? <img src={user.avatar} alt="Your profile photo" referrerPolicy="no-referrer"/> : initial}</span>
+    <div><strong>Profile photo</strong><small>JPG, PNG or WebP, up to 3 MB. Shown in the menu at the top of the site.</small>
+      <div className="ac-photo-btns"><label className="pd-btn-sm">{busy ? 'Saving…' : user.avatar ? 'Change photo' : 'Upload photo'}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={pick} disabled={busy} hidden/></label>
+        {user.avatar && <button type="button" className="pd-btn-sm" onClick={remove} disabled={busy}>Remove</button>}</div>
+      {msg && <p className={msg.ok ? 'pd-ok' : 'pd-err'} role="status">{msg.text}</p>}</div>
+  </div>;
 }
