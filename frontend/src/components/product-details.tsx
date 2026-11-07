@@ -3,7 +3,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {useEffect, useRef, useState} from 'react';
 import {useRouter} from 'next/navigation';
-import {Heart, ShoppingBag, ArrowRight, Check, X, ZoomIn, Minus, Plus, Ruler, TicketPercent, ChevronDown, ChevronLeft, ChevronRight, Star, PencilLine, CircleAlert, Shirt, Link2, Share2} from 'lucide-react';
+import {Heart, ShoppingBag, ArrowRight, Check, X, ZoomIn, Ruler, TicketPercent, ChevronDown, ChevronLeft, ChevronRight, Star, PencilLine, CircleAlert, Link2, Share2, Truck, Phone, Mail} from 'lucide-react';
+import {rememberViewed} from '@/components/product-extras';
 import {Bag, Product, money, photo, discount} from '@/lib/types';
 import {api, bagChanged, err} from '@/lib/client';
 import type {PinInfo} from '@/lib/types';
@@ -19,7 +20,8 @@ function WhatsAppIcon() {
   return <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.8-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z"/></svg>;
 }
 
-export function ProductDetails({product: p, phone, deliveryMessage, swatches = {}}: {product: Product; phone: string; deliveryMessage: string; swatches?: Record<string, string>}) {
+export function ProductDetails({product: p, phone, deliveryMessage, swatches = {}, email = '', crumbs = [], paired = []}: {product: Product; phone: string; deliveryMessage: string; swatches?: Record<string, string>;
+  email?: string; crumbs?: {label: string; href: string}[]; paired?: Product[]}) {
   const router = useRouter();
   const colours = [...new Set(p.variants.map(v => v.colour))];
   const firstInStock = p.variants.find(v => v.stock > 0);
@@ -48,7 +50,7 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
         : {ok: false, text: 'Sorry, we can’t deliver to this PIN code yet. Message us on WhatsApp and we’ll help.'});
     } catch { setPinMsg({ok: true, text: deliveryMessage}); }
   };
-  const [tab, setTab] = useState('details'), [pageUrl, setPageUrl] = useState('');
+  const [pageUrl, setPageUrl] = useState('');
   useEffect(() => setPageUrl(window.location.href.split('#')[0]), []);
   const measureRef = useRef<HTMLDivElement>(null), popupBtn = useRef<HTMLAnchorElement | HTMLButtonElement>(null);
   const off = discount(p);
@@ -164,72 +166,97 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
   ].filter(Boolean).join('\n');
   const waHref = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(waText)}`;
 
+  const ready = p.variants.some(v => v.stock > 0);
+  const tags = [p.custom_fit && 'Custom-fit', ready && 'Ready to Ship', off > 0 && `${off}% Off`, ...p.occasions.slice(0, 2)].filter(Boolean) as string[];
+  const digits = phone.replace(/\D/g, '');
+  const stylistHref = digits ? `https://wa.me/${digits}?text=${encodeURIComponent(`Hello Aiman Royale, I'd like to speak to a stylist about ${p.name}.\n${pageUrl}`)}` : '/appointment';
+  const eta = (() => { const d = new Date(); d.setDate(d.getDate() + 10); return d.toLocaleDateString('en-IN', {weekday: 'short', day: 'numeric', month: 'short'}); })();
+  const mainBtn = useRef<HTMLDivElement>(null), [showBar, setShowBar] = useState(false);
+  useEffect(() => {
+    const el = mainBtn.current; if (!el || typeof IntersectionObserver === 'undefined') return;
+    const o = new IntersectionObserver(([e]) => setShowBar(!e.isIntersecting && e.boundingClientRect.top < 0)); o.observe(el); return () => o.disconnect();
+  }, []);
+  // Remember this product for "Recently Viewed".
+  useEffect(() => { rememberViewed({slug: p.slug, name: p.name, price: p.price, mrp: p.mrp, image: images[0]?.url || ''}); }, [p.slug]); // eslint-disable-line react-hooks/exhaustive-deps
+  const addButton = (cls = '') => type === 'custom'
+    ? <button type="button" className={`pd-btn pd-btn-bag ${cls}`} disabled={!!busy} onClick={() => setCustomize(true)}><Ruler size={18}/>Customize &amp; Send Request</button>
+    : variantInBag ? <Link href="/cart" className={`pd-btn pd-btn-bag pd-go-bag ${cls}`}><ShoppingBag size={18}/>Go to Bag <ArrowRight size={16}/></Link>
+    : <button type="button" className={`pd-btn pd-btn-bag ${cls}`} disabled={!!busy} onClick={onAdd}>{busy === 'bag' ? 'Adding…' : 'Add To Cart'}</button>;
+
   return <>
-    <div className="pd">
-      <div className="pd-gallery">
-        <div className="pd-thumbs">{images.map((im, i) => <button key={im.id + '-' + i} type="button" onClick={() => setImage(i)} aria-label={`View photo ${i + 1}`} aria-pressed={i === image} className={i === image ? 'on' : ''}><Image src={im.url} alt="" width={96} height={128}/></button>)}</div>
-        <div className="pd-main"><Image src={images[image]?.url} alt={images[image]?.alt || p.name} fill priority sizes="(max-width:800px) 100vw, 46vw" quality={88}/>
-          <button type="button" className="pd-zoom" aria-label="Zoom image" onClick={() => setZoom(true)}><ZoomIn size={20}/></button></div>
+    <div className="az-pd">
+      <div className="az-gal">
+        <div className={`az-shots${images.length === 1 ? ' one' : images.length % 2 ? ' odd' : ''}`}>{images.map((im, i) => <button key={im.id + '-' + i} type="button" className="az-shot" aria-label={`Zoom photo ${i + 1}`} onClick={() => { setImage(i); setZoom(true); }}>
+          <Image src={im.url} alt={im.alt || p.name} fill priority={i < 2} sizes="(max-width:800px) 88vw, 29vw" quality={88}/><span className="az-zoom" aria-hidden><ZoomIn size={18}/></span></button>)}</div>
+        {crumbs.length > 0 && <nav className="az-crumbs" aria-label="Breadcrumb">{crumbs.map((c, i) => <span key={c.href + i}>{i > 0 && <i aria-hidden> / </i>}{i < crumbs.length - 1 ? <Link href={c.href}>{c.label}</Link> : <span aria-current="page">{c.label}</span>}</span>)}</nav>}
       </div>
 
-      <div className="pd-info">
-        <p className="pd-brand">Aiman Royale</p>
-        <h1>{p.name}</h1>
-        <div className="pd-price"><strong>{money(p.price)}</strong>{off > 0 && <><del>{money(p.mrp)}</del><span>{off}% OFF</span></>}</div>
-        <p className="pd-tax">Inclusive of taxes.</p>
+      <div className="az-panel">
+        {tags.length > 0 && <div className="az-pills">{tags.map(t => <span key={t}>{t}</span>)}</div>}
+        <Link href="/products" className="az-brand">Aiman Royale <ChevronRight size={18}/></Link>
+        <h1 className="az-name">{p.name}</h1>
+        <div className="az-price"><strong>{money(p.price)}</strong>{off > 0 && <><del>{money(p.mrp)}</del><em>({off}% OFF)</em></>}</div>
+        <p className="az-tax">(inclusive of all taxes)</p>
 
-        {p.custom_fit && <><p className="pd-label">Select Type</p>
+        {colours.length > 0 && <div className="az-block"><p className="pd-label">Colour: <span>{colour}</span></p>
+          <div className="pd-colours">{colours.map(c => <button type="button" key={c} aria-label={c} aria-pressed={c === colour} className={c === colour ? 'on' : ''} onClick={() => pickColour(c)}><span style={{background: swatches[c.toLowerCase()] || COLOUR_HEX[c.toLowerCase()] || '#b9aca3'}}/></button>)}</div></div>}
+
+        {p.custom_fit && <div className="az-block"><p className="pd-label">Select Type</p>
           <div className="pd-options"><button type="button" className={type === 'stitched' ? 'on' : ''} aria-pressed={type === 'stitched'} onClick={() => setType('stitched')}>Stitched</button>
-            <button type="button" className={type === 'custom' ? 'on' : ''} aria-pressed={type === 'custom'} onClick={() => { setType('custom'); setCustomize(true); }}>Custom Measurements</button></div></>}
+            <button type="button" className={type === 'custom' ? 'on' : ''} aria-pressed={type === 'custom'} onClick={() => { setType('custom'); setCustomize(true); }}>Custom Measurements</button></div></div>}
 
-        <div className="pd-row"><p className="pd-label">Size</p><Link href="/info/size-guide" className="pd-size-guide"><Ruler size={16}/> Size Guide</Link></div>
-        <div className="pd-sizes">{sizes.map(v => <button type="button" key={v.id} disabled={!v.stock} aria-pressed={variant?.id === v.id} className={variant?.id === v.id ? 'on' : ''} onClick={() => setVariantId(v.id)} title={v.stock ? '' : 'Out of stock'}>{v.size}</button>)}</div>
-
-        {colours.length > 0 && <><p className="pd-label">Colour: <span>{colour}</span></p>
-          <div className="pd-colours">{colours.map(c => <button type="button" key={c} aria-label={c} aria-pressed={c === colour} className={c === colour ? 'on' : ''} onClick={() => pickColour(c)}><span style={{background: swatches[c.toLowerCase()] || COLOUR_HEX[c.toLowerCase()] || '#b9aca3'}}/></button>)}</div></>}
-
-        <div className="pd-qty-row"><p className="pd-label">Quantity</p>
-          <div className="pd-qty"><button type="button" aria-label="Decrease quantity" onClick={() => setQty(Math.max(1, qty - 1))} disabled={qty <= 1}><Minus size={16}/></button><span aria-live="polite">{qty}</span><button type="button" aria-label="Increase quantity" onClick={() => setQty(Math.min(maxQty, qty + 1))} disabled={qty >= maxQty}><Plus size={16}/></button></div></div>
-
-        <div className="pd-actions">
-          {type === 'custom' ? <>
-            <button type="button" className="pd-btn pd-btn-bag pd-custom-btn" disabled={!!busy} onClick={() => setCustomize(true)}><Ruler size={19}/>Customize &amp; Send Request</button>
-            <p className="pd-custom-note">Our team checks your measurements and confirms the price. You pay once it’s accepted — from My Account → Custom Requests.</p></>
-          : <>{variantInBag ? <Link href="/cart" className="pd-btn pd-btn-bag pd-go-bag"><ShoppingBag size={19}/>Go to Bag <ArrowRight size={17}/></Link>
-            : <button type="button" className="pd-btn pd-btn-bag" disabled={!!busy} onClick={onAdd}><ShoppingBag size={19}/>{busy === 'bag' ? 'Adding…' : 'Add to Bag'}</button>}
-          <button type="button" className="pd-btn pd-btn-buy" disabled={!!busy} onClick={onBuyNow}>{busy === 'buy' ? 'Please wait…' : <>Buy Now <ArrowRight size={18}/></>}</button></>}
-          <div className="pd-actions-pair">
-            <button type="button" className={saved ? 'pd-btn pd-btn-wish on' : 'pd-btn pd-btn-wish'} aria-pressed={saved} onClick={onWish}><Heart size={18} fill={saved ? 'currentColor' : 'none'}/>{saved ? 'Wishlisted' : 'Save to Wishlist'}</button>
-            <a className="pd-btn pd-btn-wa" href={waHref} target="_blank" rel="noopener noreferrer"><WhatsAppIcon/>Order on WhatsApp</a>
-          </div>
-          <p className="pd-note" role="status">{note}</p>
+        <div className="az-block">
+          <div className="pd-row"><p className="pd-label">Select size</p><Link href="/info/size-guide" className="pd-size-guide"><Ruler size={15}/> Size guide</Link></div>
+          <div className="pd-sizes">{sizes.map(v => <button type="button" key={v.id} disabled={!v.stock} aria-pressed={variant?.id === v.id} className={variant?.id === v.id ? 'on' : ''} onClick={() => setVariantId(v.id)} title={v.stock ? '' : 'Out of stock'}>{v.size}</button>)}</div>
         </div>
 
-        <div className="pd-delivery">
-          <p className="pd-label">Check delivery at your location</p>
+        <label className="az-qty">Qty <select value={qty} onChange={e => setQty(Number(e.target.value))} aria-label="Quantity">{Array.from({length: Math.min(maxQty, 10)}, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}</select></label>
+
+        <div className="az-actions" ref={mainBtn}>
+          {addButton()}
+          <a className="pd-btn az-stylist" href={stylistHref} target={digits ? '_blank' : undefined} rel="noopener noreferrer">Speak To Stylist</a>
+        </div>
+        {type === 'custom' ? <p className="pd-custom-note">Our team checks your measurements and confirms the price. You pay once it’s accepted — from My Account → Custom Requests.</p>
+          : <button type="button" className="pd-btn az-buy" disabled={!!busy} onClick={onBuyNow}>{busy === 'buy' ? 'Please wait…' : <>Buy Now <ArrowRight size={17}/></>}</button>}
+        <div className="az-minor">
+          <button type="button" className={saved ? 'on' : ''} aria-pressed={saved} onClick={onWish}><Heart size={17} fill={saved ? 'currentColor' : 'none'}/>{saved ? 'Wishlisted' : 'Add to Wishlist'}</button>
+          <a href={waHref} target="_blank" rel="noopener noreferrer"><WhatsAppIcon/>Order on WhatsApp</a>
+        </div>
+        <p className="pd-note" role="status">{note}</p>
+
+        <div className="az-delivery">
+          <p className="pd-label">Delivery &amp; Services</p>
           <form onSubmit={checkPin}>
-            <input value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" placeholder="Enter PIN code" aria-label="PIN code"/><button className="pd-btn-sm">Check</button>
+            <input value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" placeholder="Enter PIN code" aria-label="PIN code"/><button className="az-check">Check</button>
           </form>
-          {pinMsg && <p className={pinMsg.ok ? 'pd-ok' : 'pd-err'}>{pinMsg.ok ? <Check size={16}/> : <CircleAlert size={16}/>}{pinMsg.text}</p>}
-          <Link href="/info/shipping" className="pd-link">View delivery & return details <ArrowRight size={14}/></Link>
+          {pinMsg ? <p className={pinMsg.ok ? 'pd-ok' : 'pd-err'}>{pinMsg.ok ? <Check size={16}/> : <CircleAlert size={16}/>}{pinMsg.text}</p>
+            : <p className="az-eta"><Truck size={16}/> Estimated delivery by <strong>{eta}</strong></p>}
         </div>
+
+        <div className="az-confidence"><p className="pd-label">Shop with Confidence</p>
+          <ul>{['100% Authentic Products', 'Secure Payments', 'Easy Returns', 'Custom Fitting Available', 'Quality Checked', 'Pan-India Delivery'].map(x => <li key={x}><Check size={15}/>{x}</li>)}</ul></div>
 
         <ProductCoupons/>
 
+        <div className="az-acc">
+          <details open><summary>Product Details<ChevronDown size={18}/></summary><div>
+            {p.description && <p>{p.description}</p>}
+            <dl>{[['Colour', colour], ['Fabric', p.fabric], ['Fit', p.fit], ['Includes', p.includes]].filter(([, v]) => v).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl></div></details>
+          <details><summary>Measurements &amp; Fit<ChevronDown size={18}/></summary><div><p>Choose <strong>Stitched</strong> for our standard sizes, or <strong>Custom Measurements</strong> to have this style made to your bust, waist, hip and armhole measurements. Our team confirms measurements before stitching.</p><Link href="/info/size-guide" className="pd-link">Open the size guide <ArrowRight size={14}/></Link></div></details>
+          <details><summary>Care<ChevronDown size={18}/></summary><div><p>{p.care || 'Professional dry clean recommended.'}</p></div></details>
+          <details><summary>Shipping &amp; Returns<ChevronDown size={18}/></summary><div><p>{deliveryMessage}</p><Link href="/info/shipping" className="pd-link">Shipping policy <ArrowRight size={14}/></Link> <Link href="/info/returns" className="pd-link">Return &amp; refund policy <ArrowRight size={14}/></Link></div></details>
+        </div>
+
+        <div className="az-support"><p className="pd-label">Customer Support</p>
+          <div>{digits && <a href={`https://wa.me/${digits}`} target="_blank" rel="noopener noreferrer"><WhatsAppIcon/> Chat with us</a>}
+            {digits && <a href={`tel:+${digits}`}><Phone size={16}/> +{digits}</a>}
+            {email && <a href={`mailto:${email}`}><Mail size={16}/> Mail us</a>}</div></div>
+
         <ShareBar name={p.name} url={pageUrl}/>
 
-        <div className="pd-help"><Shirt size={46} strokeWidth={1}/><div><strong>Need help with your fit?</strong><p>Discuss your measurements and styling with our team.</p><Link href="/appointment" className="pd-btn-sm">Book a Fitting <ArrowRight size={15}/></Link></div></div>
+        {paired.length > 0 && <div className="az-paired"><p className="pd-label">Perfectly Paired</p>
+          <div className="az-paired-row">{paired.map(r => <Link key={r.id} href={`/products/${r.slug}`} className="az-paired-card"><span><Image src={photo(r)} alt="" fill sizes="140px"/></span><strong>{r.name}</strong><em>{money(r.price)}</em></Link>)}</div></div>}
       </div>
-    </div>
-
-    <div className="pd-tabs" role="tablist">{[['details', 'Product Details'], ['fit', 'Measurements & Fit'], ['care', 'Care'], ['reviews', 'Reviews']].map(([k, label]) =>
-      <button key={k} role="tab" type="button" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{label}</button>)}</div>
-    <div className="pd-tab-body">
-      {tab === 'details' && <div className="pd-details"><div className="pd-details-img"><Image src={images[1]?.url || '/images/embroidery.webp'} alt="Fabric and embroidery detail" fill sizes="(max-width:800px) 100vw, 26vw"/></div>
-        <div><h2>Product Details</h2><p>{p.description}</p><dl>{[['Colour', colour], ['Fabric', p.fabric], ['Fit', p.fit], ['Includes', p.includes]].filter(([, v]) => v).map(([k, v]) => <div key={k}><dt>{k}:</dt><dd>{v}</dd></div>)}</dl></div></div>}
-      {tab === 'fit' && <div className="pd-text"><h2>Measurements & Fit</h2><p>Choose <strong>Stitched</strong> for our standard sizes, or <strong>Custom Measurements</strong> to have this style made to your bust, waist, hip and armhole measurements. Our team confirms measurements before stitching.</p><p><Link href="/info/size-guide" className="pd-link">Open the size guide <ArrowRight size={14}/></Link></p></div>}
-      {tab === 'care' && <div className="pd-text"><h2>Care</h2><p>{p.care || 'Professional dry clean recommended.'}</p></div>}
-      {tab === 'reviews' && <ReviewsBlock slug={p.slug}/>}
     </div>
 
     {p.custom_fit && <div className="pd-measure pd-measure-cta" ref={measureRef} id="measurements">
@@ -238,7 +265,13 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
     </div>}
     {customize && <CustomizeModal p={p} phone={phone} colour={colour} busy={busy === 'bag'} onClose={() => setCustomize(false)} onSend={sendCustom}/>}
 
-    {tab !== 'reviews' && <ReviewsBlock slug={p.slug} section/>}
+    <ReviewsBlock slug={p.slug} section/>
+
+    <div className={showBar ? 'az-bar show' : 'az-bar'} aria-hidden={!showBar}>
+      <Image src={images[0].url} alt="" width={44} height={58}/>
+      <div><strong>{p.name}</strong><span>{money(p.price)}</span></div>
+      {addButton('az-bar-btn')}
+    </div>
 
     {customDone && <div className="pd-modal" role="dialog" aria-modal="true" aria-labelledby="pd-custom-title" onClick={e => { if (e.target === e.currentTarget) setCustomDone(false); }}>
       <div className="pd-modal-box ok"><button type="button" className="pd-modal-close" aria-label="Close" onClick={() => setCustomDone(false)}><X size={20}/></button>

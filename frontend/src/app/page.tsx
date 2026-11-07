@@ -17,6 +17,9 @@ type Section = {id: number; kind: string; eyebrow: string; title: string; subtit
 
 const ICONS = {award: Award, shield: ShieldCheck, truck: Truck, headphones: Headphones, package: PackageCheck, gem: Gem, heart: Heart, star: Star,
   sparkles: Sparkles, calendar: CalendarDays, ruler: Ruler, video: Video, user: UserRound, check: Check} as const;
+// Thin line icons for the appointment band (video call / dress).
+const VideoIcon = () => <svg viewBox="0 0 48 48" width="54" height="54" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="5" y="12" width="27" height="24" rx="3"/><path d="m32 21 11-6v18l-11-6"/><circle cx="18.5" cy="21" r="4"/><path d="M11 31c1.6-3.2 4.3-4.8 7.5-4.8S24.4 27.8 26 31"/></svg>;
+const DressIcon = () => <svg viewBox="0 0 48 48" width="54" height="54" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M19 4v7M29 4v7"/><path d="M19 11c1 2.5 2.8 4 5 4s4-1.5 5-4"/><path d="M19 11l-2 9 3.5 3L9 43h30L27.5 23l3.5-3-2-9"/><path d="M17 20h14M14 36c3 1.5 6.5 2 10 2s7-.5 10-2"/></svg>;
 const Icon = ({name}: {name: string}) => { const I = ICONS[name as keyof typeof ICONS]; return I ? <I/> : null; };
 const IMG = '/images/collection.webp';
 const lines = (t: string) => t.split('\n').flatMap((l, i) => i ? [<br key={i}/>, l] : [l]);
@@ -87,10 +90,11 @@ function render(s: Section, products: Record<number, ProductPage>, sizeGuide: Si
       return <Wrap><section className="lh-sec"><Head s={s} cls="center small"/><div className="lh-duo">{c.map(x => <Link key={x.title + x.href} href={x.href || '/products'}>
         <Image src={x.image || IMG} alt={x.title} fill sizes="(max-width:700px) 100vw, 50vw"/><div><h3>{x.title}</h3>{x.text && <p>{x.text}</p>}<span>{x.caption || 'Shop now'} <ArrowRight size={14}/></span></div></Link>)}</div></section></Wrap>;
     case 'consult':
-      return <Wrap><section className="lh-consult"><Head s={s} cls="center pink"/><div className="lh-consult-box">{c.map((x, k) =>
-        <article key={x.title + x.label} className={k % 2 ? 'alt' : ''}>{x.label && <small className="lh-badge">{x.label}</small>}<span className="lh-ico"><Icon name={x.icon || 'calendar'}/></span>
-          {x.title && <h3>{x.title}</h3>}{x.text && <p>{x.text}</p>}{x.bullets.length > 0 && <ul>{x.bullets.map(b => <li key={b}><Check size={12}/>{b}</li>)}</ul>}
-          {x.button && <Link href={x.href || '/appointment'} className="lh-consult-btn">{k % 2 ? <Plus size={15}/> : <CalendarDays size={15}/>} {x.button}</Link>}</article>)}</div></section></Wrap>;
+      return <section className="ar-consult" aria-label={s.title || 'Book an appointment'}>{s.title && <h2 className="ar-consult-title">{s.title}</h2>}
+        <div className="ar-consult-row">{c.map(x =>
+          <article key={x.title + x.label}><span className="ar-consult-ico">{x.icon === 'dress' ? <DressIcon/> : x.icon === 'video' || !x.icon ? <VideoIcon/> : <Icon name={x.icon}/>}</span>
+            <div>{x.title && <h3>{x.title}</h3>}{x.text && <p>{x.text}</p>}
+              <Link href={x.href || '/appointment'} className="ar-consult-btn">{x.button || 'Book an Appointment'}</Link></div></article>)}</div></section>;
     case 'notes':
       return c.length ? <NotesCarousel badge={s.eyebrow || s.title} image={s.image || '/images/rani.webp'} notes={c.map(x => ({title: x.title, text: x.text, name: x.label, role: x.caption}))}/> : null;
     case 'story':

@@ -344,7 +344,7 @@ class HomeSection(models.Model):
 
 class HomeCard(models.Model):
     ICONS=[('','None'),('award','Award'),('shield','Shield'),('truck','Truck'),('headphones','Headphones'),('package','Package'),
-           ('gem','Gem'),('heart','Heart'),('star','Star'),('sparkles','Sparkles'),('calendar','Calendar'),('ruler','Ruler'),('video','Video call'),('user','Person'),('check','Tick')]
+           ('gem','Gem'),('heart','Heart'),('star','Star'),('sparkles','Sparkles'),('calendar','Calendar'),('ruler','Ruler'),('video','Video call'),('user','Person'),('check','Tick'),('dress','Dress')]
     section=models.ForeignKey(HomeSection,on_delete=models.CASCADE,related_name='cards')
     label=models.CharField('Small label',max_length=80,blank=True)
     title=models.CharField(max_length=160,blank=True)

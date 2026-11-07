@@ -1,10 +1,9 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import {notFound} from 'next/navigation';
-import {ArrowRight} from 'lucide-react';
 import {get, origin} from '@/lib/server';
 import {Facets, Product, ProductPage, Site, money, photo} from '@/lib/types';
 import {ProductDetails} from '@/components/product-details';
+import {SimilarItems, RecentlyViewed} from '@/components/product-extras';
 
 type Props = {params: Promise<{slug: string}>};
 
@@ -34,7 +33,11 @@ export default async function Detail({params}: Props) {
   const today = new Date().toLocaleDateString('en-GB', {day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata'});
   // Related: same collection first, then featured styles.
   const seen = new Set([p.id]);
-  const related = [...(sameCol?.results || []), ...(featured?.results || [])].filter(x => !seen.has(x.id) && seen.add(x.id)).slice(0, 3);
+  const related = [...(sameCol?.results || []), ...(featured?.results || [])].filter(x => !seen.has(x.id) && seen.add(x.id)).slice(0, 9);
+  // Perfectly Paired: featured styles from other collections (fallback: anything not shown above).
+  const inCol = new Set((sameCol?.results || []).map(x => x.id));
+  const paired = (featured?.results || []).filter(x => x.id !== p.id && !inCol.has(x.id)).slice(0, 6);
+  const crumbs = [{label: 'Home', href: '/'}, col ? {label: col.name, href: `/collections/${col.slug}`} : {label: 'Collections', href: '/products'}, {label: p.name, href: `/products/${p.slug}`}];
   const swatches = Object.fromEntries((facets?.colours || []).map(c => [c.name.toLowerCase(), c.hex]));
   const json = {'@context': 'https://schema.org', '@type': 'Product', name: p.name, image: p.images.map(i => new URL(i.url, origin).href), description: p.description,
     brand: {'@type': 'Brand', name: 'Aiman Royale'}, offers: {'@type': 'Offer', url: `${origin}/products/${p.slug}`, priceCurrency: 'INR', price: p.price,
@@ -44,13 +47,10 @@ export default async function Detail({params}: Props) {
     <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify(json).replace(/</g, '\\u003c')}}/>
     {faqs.length > 0 && <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify({'@context': 'https://schema.org', '@type': 'FAQPage',
       mainEntity: faqs.map(f => ({'@type': 'Question', name: f.q, acceptedAnswer: {'@type': 'Answer', text: f.a}}))}).replace(/</g, '\\u003c')}}/>}
-    <nav className="pd-crumbs" aria-label="Breadcrumb"><Link href="/">Home</Link> / {col ? <Link href={`/collections/${col.slug}`}>{col.name}</Link> : <Link href="/products">Collections</Link>} / <span>{p.name}</span></nav>
-    <ProductDetails product={p} phone={site?.phone || ''} deliveryMessage={site?.delivery_message || 'We deliver across India. Shipping charges and timelines are confirmed at checkout.'} swatches={swatches}/>
-    {related.length > 0 && <section className="pd-section pd-related">
-      <div className="pd-related-head"><h2>Related Products</h2><Link href={col ? `/collections/${col.slug}` : '/products'} className="pd-link">View All Products <ArrowRight size={14}/></Link></div>
-      <div className="pd-related-grid">{related.map(r => <Link key={r.id} href={`/products/${r.slug}`} className="pd-related-card">
-        <div><Image src={photo(r)} alt={r.images[0]?.alt || r.name} fill sizes="(max-width:700px) 90vw, 30vw"/></div><h3>{r.name}</h3><strong>{money(r.price)}</strong></Link>)}</div>
-    </section>}
+    <ProductDetails product={p} phone={site?.phone || ''} email={site?.email || ''} crumbs={crumbs} paired={paired.length ? paired : related.slice(3, 9)}
+      deliveryMessage={site?.delivery_message || 'We deliver across India. Shipping charges and timelines are confirmed at checkout.'} swatches={swatches}/>
+    <SimilarItems items={related} hex={swatches}/>
+    <RecentlyViewed current={p.slug}/>
     {(faqs.length > 0 || latest.length > 0) && <section className="pd-section pd-faq-wrap">
       {faqs.length > 0 && <div className="pd-faq-card">
         <h2>Frequently Asked <em>(FAQs)</em><br/>On {p.name}</h2><p className="pd-faq-sub">Everything you need to know about our ethnic collection</p>
