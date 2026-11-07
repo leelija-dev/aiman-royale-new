@@ -657,3 +657,48 @@ class AvatarTests(TestCase):
             bad=c.post('/api/auth/avatar/',{'photo':SimpleUploadedFile('x.png',b'not an image','image/png')},format='multipart');self.assertEqual(bad.status_code,400)
             self.assertEqual(c.delete('/api/auth/avatar/').data['user']['avatar'],'')
         self.assertEqual(APIClient().post('/api/auth/avatar/',{},format='multipart').status_code,403)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'],STORAGES=ADMIN_STORAGE,**DELHIVERY)
+class AdminDashboardTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.u=Customer.objects.create_user(username='d2@example.com',email='d2@example.com',password='Test-Password-910!')
+        self.staff=Customer.objects.create_superuser(username='s2@example.com',email='s2@example.com',password='Test-Password-910!')
+        self.p=Product.objects.create(name='Gown',slug='gown-y',price='3000',mrp='4000',custom_fit=True)
+        self.v=Variant.objects.create(product=self.p,sku='G-L',size='L',colour='Red',stock=3)
+        cart=Cart.objects.create(user=self.u);CartItem.objects.create(cart=cart,variant=self.v,quantity=1)
+        self.addr={'name':'Dia','phone':'+919000000001','email':'d2@example.com','line1':'Test address','city':'Kolkata','state':'West Bengal','pincode':'700001'}
+        self.o=reserve_order(self.u,cart,self.addr,uuid.uuid4(),method='cod')[0]
+        self.a=APIClient();self.a.force_login(self.staff);self.a.cookies['admin_sessionid']=self.a.cookies['sessionid'].value
+    def test_dashboard_and_sections_open(self):
+        r=self.a.get('/admin/');self.assertContains(r,'Need a waybill');self.assertContains(r,'Returns &amp; refunds')
+        for u in ['/admin/shop/readytoship/','/admin/shop/returnorder/','/admin/shop/pickuprequest/','/admin/shop/customrequest/','/admin/shop/order/','/admin/shop/product/']:
+            self.assertEqual(self.a.get(u).status_code,200,u)
+        self.assertContains(self.a.get('/admin/shop/readytoship/'),'#'+str(self.o.id)[:8].upper())
+    def test_request_pickup_with_date(self):
+        from .models import PickupRequest
+        Order.objects.filter(pk=self.o.pk).update(awb='5627861000183',status='processing')
+        form=self.a.post('/admin/shop/readytoship/',{'action':'request_pickup','_selected_action':[str(self.o.pk)]})
+        self.assertContains(form,'Request Delhivery pickup')
+        day=(timezone.localtime()+timedelta(days=1)).date().isoformat()
+        with patch('shop.delhivery.requests.request',return_value=FakeResponse({'pickup_id':123,'incoming_center_name':'Kolkata'})) as req:
+            r=self.a.post('/admin/shop/readytoship/',{'action':'request_pickup','_selected_action':[str(self.o.pk)],'apply':'1','date':day,'time':'11:30'})
+        self.assertEqual(r.status_code,302);sent=req.call_args.kwargs['json']
+        self.assertEqual(sent['pickup_date'],day);self.assertEqual(sent['pickup_time'],'11:30:00');self.assertEqual(sent['expected_package_count'],1)
+        self.o.refresh_from_db();self.assertIsNotNone(self.o.pickup_requested_at);self.assertEqual(PickupRequest.objects.get().orders.get(),self.o)
+    def test_returns_section_refund(self):
+        Order.objects.filter(pk=self.o.pk).update(status='delivered',return_status='requested',return_reason='Size',delivered_at=timezone.now())
+        self.assertContains(self.a.get('/admin/shop/returnorder/'),'Size')
+        self.a.post('/admin/shop/returnorder/',{'action':'mark_return_received','_selected_action':[str(self.o.pk)]})
+        self.a.post('/admin/shop/returnorder/',{'action':'refund_customer','_selected_action':[str(self.o.pk)]})
+        self.o.refresh_from_db();self.assertEqual(self.o.status,'refund_required')  # COD: manual refund
+        self.a.post('/admin/shop/returnorder/',{'action':'mark_refunded_manually','_selected_action':[str(self.o.pk)]})
+        self.o.refresh_from_db();self.assertEqual(self.o.status,'refunded')
+    def test_custom_request_with_customisations(self):
+        c=APIClient();c.force_login(self.u)
+        r=c.post('/api/custom-requests/',{'product':'gown-y','variant':self.v.id,'measurements':{'unit':'in','height':'64','sleeve':'18'},
+                 'options':{'neckline':'Deep V','extra':'Add tassels'}},format='json')
+        self.assertEqual(r.status_code,201,r.data);self.assertEqual(r.data['measurements'],{'height':64.0,'sleeve':18.0,'unit':'in'});self.assertEqual(r.data['options']['neckline'],'Deep V')
+        self.assertEqual(c.post('/api/custom-requests/',{'product':'gown-y','measurements':{'unit':'in'}},format='json').status_code,400)
+        self.assertContains(self.a.get(f"/admin/shop/customrequest/{r.data['id']}/change/"),'Deep V')

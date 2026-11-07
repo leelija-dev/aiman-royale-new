@@ -1,0 +1,16 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div class="ar-dash" style="max-width:760px">
+  <p>Delhivery will collect <strong>{{ orders|length }} parcel(s)</strong> from your pickup location.{% if missing %} <em>{{ missing }} selected order(s) without a waybill were skipped — create their shipment first.</em>{% endif %}</p>
+  <table class="ar-table"><thead><tr><th>Order</th><th>Customer</th><th>Waybill</th><th>Deliver to</th></tr></thead><tbody>
+  {% for o in orders %}<tr><td>#{{ o.id|stringformat:"s"|slice:":8"|upper }}</td><td>{{ o.address.name }}</td><td>{{ o.awb }}</td><td>{{ o.address.city }} {{ o.address.pincode }}</td></tr>{% endfor %}
+  </tbody></table>
+  <form method="post">{% csrf_token %}
+    {% for pk in selected %}<input type="hidden" name="_selected_action" value="{{ pk }}">{% endfor %}
+    <input type="hidden" name="action" value="{{ action }}"><input type="hidden" name="apply" value="1">
+    <p style="display:flex;gap:16px;align-items:end;margin-top:18px"><label>Pickup date<br>{{ form.date }}</label><label>Time<br>{{ form.time }}</label>
+      <button type="submit" class="button default" style="padding:9px 18px">Request pickup</button> <a href="../">Cancel</a></p>
+    {{ form.non_field_errors }}{{ form.date.errors }}{{ form.time.errors }}
+  </form>
+</div>
+{% endblock %}

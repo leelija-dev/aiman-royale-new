@@ -9,6 +9,7 @@ import {api, bagChanged, err} from '@/lib/client';
 import type {PinInfo} from '@/lib/types';
 import {useWishlist, loginHere} from '@/lib/wishlist';
 import {COUPON_KEY} from '@/components/bag';
+import {CustomizeModal, type CustomPayload} from '@/components/customize-modal';
 
 type Popup = {ok: true; title: string; detail: string; image: string} | {ok: false; title: string; detail: string};
 type Reviews = {average: number | null; count: number; reviews: {name: string; rating: number; text: string; date: string}[]};
@@ -96,27 +97,24 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
 
   const CUSTOM_DRAFT = 'ar-custom-draft';
   const [customDone, setCustomDone] = useState(false);
-  async function sendCustom(draft?: {variant: number; m: Record<string, string>; qty: number}) {
-    const body = draft || {variant: (variant || p.variants.find(v => v.colour === colour))?.id || 0, m, qty};
-    if (!draft && !mSaved) {
-      setPopup({ok: false, title: 'Add your measurements', detail: 'Enter and save your bust, waist, hip and armhole measurements below, then send your request.'});
-      measureRef.current?.scrollIntoView({behavior: 'smooth', block: 'center'}); return;
-    }
+  const [customize, setCustomize] = useState(false);
+  async function sendCustom(body: CustomPayload) {
     setBusy('bag');
     try {
       const me = await api<{user: unknown}>('auth/me/').catch(() => ({user: null}));
       if (!me.user) { try { localStorage.setItem(CUSTOM_DRAFT, JSON.stringify({slug: p.slug, ...body})); } catch {} router.push(loginHere()); return; }
-      await api('custom-requests/', 'POST', {product: p.slug, variant: body.variant || undefined, measurements: body.m, quantity: body.qty});
+      await api('custom-requests/', 'POST', {product: p.slug, variant: body.variant || undefined, measurements: body.m, options: body.options, quantity: body.qty});
       try { localStorage.removeItem(CUSTOM_DRAFT); } catch {}
-      setCustomDone(true);
+      setCustomize(false); setLastCustom(body); setCustomDone(true);
     } catch (e) { setPopup({ok: false, title: 'Could not send your request', detail: err(e)}); }
     finally { setBusy(''); }
   }
+  const [lastCustom, setLastCustom] = useState<CustomPayload | null>(null);
   // Came back from sign-in with a custom request started: send it now.
   useEffect(() => {
-    let d: {slug: string; variant: number; m: Record<string, string>; qty: number} | null = null;
+    let d: (CustomPayload & {slug: string}) | null = null;
     try { d = JSON.parse(localStorage.getItem(CUSTOM_DRAFT) || 'null'); } catch {}
-    if (d && d.slug === p.slug) { setType('custom'); setM(d.m); setMSaved(true); api<{user: unknown}>('auth/me/').then(r => { if (r.user) sendCustom(d!); }).catch(() => {}); }
+    if (d && d.slug === p.slug && d.m) { setType('custom'); api<{user: unknown}>('auth/me/').then(r => { if (r.user) sendCustom(d!); }).catch(() => {}); }
   }, [p.slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function onAdd() {
@@ -182,7 +180,7 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
 
         {p.custom_fit && <><p className="pd-label">Select Type</p>
           <div className="pd-options"><button type="button" className={type === 'stitched' ? 'on' : ''} aria-pressed={type === 'stitched'} onClick={() => setType('stitched')}>Stitched</button>
-            <button type="button" className={type === 'custom' ? 'on' : ''} aria-pressed={type === 'custom'} onClick={() => { setType('custom'); if (!mSaved) measureRef.current?.scrollIntoView({behavior: 'smooth', block: 'center'}); }}>Custom Measurements</button></div></>}
+            <button type="button" className={type === 'custom' ? 'on' : ''} aria-pressed={type === 'custom'} onClick={() => { setType('custom'); setCustomize(true); }}>Custom Measurements</button></div></>}
 
         <div className="pd-row"><p className="pd-label">Size</p><Link href="/info/size-guide" className="pd-size-guide"><Ruler size={16}/> Size Guide</Link></div>
         <div className="pd-sizes">{sizes.map(v => <button type="button" key={v.id} disabled={!v.stock} aria-pressed={variant?.id === v.id} className={variant?.id === v.id ? 'on' : ''} onClick={() => setVariantId(v.id)} title={v.stock ? '' : 'Out of stock'}>{v.size}</button>)}</div>
@@ -195,7 +193,7 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
 
         <div className="pd-actions">
           {type === 'custom' ? <>
-            <button type="button" className="pd-btn pd-btn-bag pd-custom-btn" disabled={!!busy} onClick={() => sendCustom()}><Ruler size={19}/>{busy ? 'Sending…' : 'Send Custom Request'}</button>
+            <button type="button" className="pd-btn pd-btn-bag pd-custom-btn" disabled={!!busy} onClick={() => setCustomize(true)}><Ruler size={19}/>Customize &amp; Send Request</button>
             <p className="pd-custom-note">Our team checks your measurements and confirms the price. You pay once it’s accepted — from My Account → Custom Requests.</p></>
           : <>{variantInBag ? <Link href="/cart" className="pd-btn pd-btn-bag pd-go-bag"><ShoppingBag size={19}/>Go to Bag <ArrowRight size={17}/></Link>
             : <button type="button" className="pd-btn pd-btn-bag" disabled={!!busy} onClick={onAdd}><ShoppingBag size={19}/>{busy === 'bag' ? 'Adding…' : 'Add to Bag'}</button>}
@@ -234,20 +232,18 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
       {tab === 'reviews' && <ReviewsBlock slug={p.slug}/>}
     </div>
 
-    {p.custom_fit && <div className="pd-measure" ref={measureRef} id="measurements">
-      <div className="pd-measure-head"><div><h2>Custom Measurements option</h2><p>Made personal, with your measurements.</p></div>
-        <div className="pd-unit">{(['cm', 'in'] as const).map(u => <button type="button" key={u} className={m.unit === u ? 'on' : ''} aria-pressed={m.unit === u} onClick={() => { setM({...m, unit: u}); setMSaved(false); }}>{u === 'cm' ? 'cm' : 'inches'}</button>)}</div></div>
-      <div className="pd-measure-row">{FIELDS.map(k => <label key={k}>{k[0].toUpperCase() + k.slice(1)} ({m.unit === 'cm' ? 'cm' : 'in'})<input type="number" min={5} max={250} step={0.25} value={m[k]} placeholder={`Enter ${k}`} onChange={e => { setM({...m, [k]: e.target.value}); setMSaved(false); }}/></label>)}
-        <button type="button" className="pd-btn pd-btn-bag" onClick={saveMeasurements}>{mSaved ? <><Check size={17}/> Saved</> : 'Save Measurements'}</button></div>
-      <p className={mSaved ? 'pd-ok' : 'pd-measure-note'}>{mMsg || 'Confirm measurement requirements with our team before ordering.'}</p>
+    {p.custom_fit && <div className="pd-measure pd-measure-cta" ref={measureRef} id="measurements">
+      <div><h2>Custom Measurements option</h2><p>Made personal, with your measurements — choose a size, add your measurements and design changes. Our team confirms the price before you pay.</p></div>
+      <button type="button" className="pd-btn pd-btn-bag" onClick={() => { setType('custom'); setCustomize(true); }}><Ruler size={17}/> Customize this outfit</button>
     </div>}
+    {customize && <CustomizeModal p={p} phone={phone} colour={colour} busy={busy === 'bag'} onClose={() => setCustomize(false)} onSend={sendCustom}/>}
 
     {tab !== 'reviews' && <ReviewsBlock slug={p.slug} section/>}
 
     {customDone && <div className="pd-modal" role="dialog" aria-modal="true" aria-labelledby="pd-custom-title" onClick={e => { if (e.target === e.currentTarget) setCustomDone(false); }}>
       <div className="pd-modal-box ok"><button type="button" className="pd-modal-close" aria-label="Close" onClick={() => setCustomDone(false)}><X size={20}/></button>
         <div className="pd-modal-icon"><Check size={28}/></div><h2 id="pd-custom-title">Custom request sent</h2>
-        <div className="pd-modal-item"><Image src={images[0].url} alt="" width={64} height={84}/><p>{p.name} · {colour}<br/>Bust {m.bust} · Waist {m.waist} · Hip {m.hip} · Armhole {m.armhole} {m.unit}</p></div>
+        <div className="pd-modal-item"><Image src={images[0].url} alt="" width={64} height={84}/><p>{p.name} · {colour}{lastCustom && <><br/>{Object.entries(lastCustom.m).filter(([k]) => k !== 'unit').map(([k, v]) => `${k.replace('_', ' ')} ${v}`).join(' · ')} {lastCustom.m.unit}</>}</p></div>
         <p>We’ll review your measurements and confirm the price by email. Once accepted, pay from My Account.</p>
         <div className="pd-modal-actions"><Link href="/account?tab=custom" className="pd-btn pd-btn-bag">View my requests <ArrowRight size={17}/></Link>
           <button type="button" className="pd-modal-link" onClick={() => setCustomDone(false)}>Continue shopping</button></div></div></div>}

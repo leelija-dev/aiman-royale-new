@@ -69,6 +69,7 @@ class SiteSettings(models.Model):
     shop_fitting_note=models.CharField('Fitting banner note',max_length=160,default='Choose a date and request your appointment.')
     shop_fitting_image=models.ImageField('Fitting banner image',upload_to='editorial/',blank=True)
     shop_trust=models.TextField('Trust strip',default='Personal Fit Guidance|Expert advice for your perfect look\nDesigner Ethnic Wear|Curated for every occasion\nSecure Shopping|Safe & trusted payments',help_text='One per line: Title|Small text')
+    class Meta:verbose_name='Site settings';verbose_name_plural='Site settings'
     @classmethod
     def current(cls): return cls.objects.get_or_create(pk=1)[0]
     def save(self,*args,**kwargs): self.pk=1;super().save(*args,**kwargs)
@@ -440,6 +441,7 @@ class CustomRequest(models.Model):
     measurements=models.JSONField(default=dict,help_text='bust, waist, hip, armhole and unit (cm / in)')
     quantity=models.PositiveIntegerField(default=1)
     note=models.TextField('Customer note',blank=True,max_length=1000)
+    options=models.JSONField('Customisations',default=dict,blank=True,help_text='Neckline / back design changes, colour change and other requests')
     status=models.CharField(max_length=12,choices=STATUSES,default='requested')
     price=models.DecimalField('Price per piece (₹)',max_digits=10,decimal_places=2,null=True,blank=True,help_text='Required to accept the request')
     admin_note=models.CharField('Message to customer',max_length=300,blank=True)
@@ -456,3 +458,21 @@ class CustomRequest(models.Model):
 class ShippingLabel(Order):
     """Admin tool: download a Delhivery shipping label by waybill number."""
     class Meta:proxy=True;verbose_name='Shipping label';verbose_name_plural='Shipping labels (by AWB)'
+
+
+class PickupRequest(models.Model):
+    """A Delhivery pickup booked from Admin → Pickup requests."""
+    pickup_at=models.DateTimeField('Pickup date & time')
+    package_count=models.PositiveIntegerField()
+    orders=models.ManyToManyField(Order,related_name='pickups',blank=True)
+    response=models.JSONField(default=dict,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    created_by=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True,related_name='+')
+    class Meta:ordering=['-created_at'];verbose_name='Pickup request'
+    def __str__(self):return f'Pickup {self.pickup_at:%d %b %Y %H:%M} · {self.package_count} parcel(s)'
+
+class ReadyToShip(Order):
+    class Meta:proxy=True;verbose_name='Order to ship';verbose_name_plural='Pickup requests · orders to ship'
+
+class ReturnOrder(Order):
+    class Meta:proxy=True;verbose_name='Return';verbose_name_plural='Returns & refunds'

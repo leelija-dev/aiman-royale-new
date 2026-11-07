@@ -1,0 +1,38 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block bodyclass %}{{ block.super }} ar-dashboard{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block nav-sidebar %}{% endblock %}
+{% block content %}
+<div class="ar-dash">
+  <div class="ar-stats">
+    {% for label, value, url, tone in stats %}<a class="ar-stat {{ tone }}{% if value == 0 %} zero{% endif %}" href="{{ url }}"><span>{{ label }}</span><strong>{{ value }}</strong></a>{% endfor %}
+  </div>
+  <div class="ar-quick">
+    <a href="/admin/shop/readytoship/">📦 Pickup requests</a>
+    <a href="/admin/shop/returnorder/">↩️ Returns &amp; refunds</a>
+    <a href="/admin/shop/customrequest/?status__exact=requested">📏 Custom requests</a>
+    <a href="/admin/shop/shippinglabel/">🏷️ Shipping labels</a>
+    <a href="/admin/shop/product/add/">＋ Add product</a>
+    <a href="/admin/shop/coupon/add/">＋ Add coupon</a>
+  </div>
+  <div class="ar-cols">
+    <div class="ar-groups">
+      {% for g in groups %}
+      <section class="ar-group"><h2>{{ g.title }}</h2>
+        <table>{% for m in g.models %}<tr><th><a href="{{ m.admin_url }}">{{ m.name }}</a></th>
+          <td>{% if m.add_url %}<a class="ar-add" href="{{ m.add_url }}">＋ Add</a>{% endif %}</td>
+          <td>{% if m.admin_url %}<a class="ar-edit" href="{{ m.admin_url }}">{% if m.view_only %}View{% else %}Manage{% endif %}</a>{% endif %}</td></tr>{% endfor %}</table>
+      </section>
+      {% endfor %}
+    </div>
+    <aside class="ar-side">
+      <section class="ar-group"><h2>Latest orders</h2>
+        <table>{% for o in recent %}<tr><th><a href="/admin/shop/order/{{ o.id }}/change/">{{ o.ref }}</a><small>{{ o.name }}</small></th><td>₹{{ o.total|floatformat:0 }}</td><td><span class="ar-pill">{{ o.status }}</span></td></tr>{% empty %}<tr><td>No orders yet.</td></tr>{% endfor %}</table>
+        <p><a href="/admin/shop/order/">All orders →</a></p></section>
+      <section class="ar-group"><h2>Upcoming appointments</h2>
+        <table>{% for a in upcoming %}<tr><th>{{ a.name|default:a.email }}<small>{% firstof a.starts_at a.slot.starts_at "Time in Calendly" %}</small></th><td>{{ a.get_mode_display }}</td></tr>{% empty %}<tr><td>None booked.</td></tr>{% endfor %}</table></section>
+    </aside>
+  </div>
+</div>
+{% endblock %}
