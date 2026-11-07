@@ -231,7 +231,7 @@ class HomepageTests(TestCase):
         d=self.client.get('/api/home/').json()['sections']
         self.assertEqual(d[-1]['kind'],'hero');self.assertNotIn('story',[x['kind'] for x in d])
         consult=[x for x in d if x['kind']=='consult'][0]
-        self.assertEqual(consult['cards'][0]['title'],'Custom title');self.assertEqual(len(consult['cards'][0]['bullets']),3)
+        self.assertEqual(consult['cards'][0]['title'],'Custom title');self.assertEqual(consult['cards'][0]['button'],'Book an Appointment')
 
 
 class AllProductsPageTests(TestCase):
