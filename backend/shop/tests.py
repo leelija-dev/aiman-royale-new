@@ -702,3 +702,13 @@ class AdminDashboardTests(TestCase):
         self.assertEqual(r.status_code,201,r.data);self.assertEqual(r.data['measurements'],{'height':64.0,'sleeve':18.0,'unit':'in'});self.assertEqual(r.data['options']['neckline'],'Deep V')
         self.assertEqual(c.post('/api/custom-requests/',{'product':'gown-y','measurements':{'unit':'in'}},format='json').status_code,400)
         self.assertContains(self.a.get(f"/admin/shop/customrequest/{r.data['id']}/change/"),'Deep V')
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'])
+class QuickFilterTests(TestCase):
+    def test_chips(self):
+        cache.clear()
+        a=Product.objects.create(name='A',slug='a',price='100',mrp='200',custom_fit=True);Variant.objects.create(product=a,sku='A1',size='M',colour='Red',stock=2)
+        b=Product.objects.create(name='B',slug='b',price='100',mrp='100',custom_fit=False);Variant.objects.create(product=b,sku='B1',size='M',colour='Red',stock=0)
+        slugs=lambda q:{x['slug'] for x in APIClient().get('/api/products/?'+q).data['results']}
+        self.assertEqual(slugs('custom=1'),{'a'});self.assertEqual(slugs('sale=1'),{'a'});self.assertEqual(slugs('ready=1'),{'a'});self.assertEqual(slugs(''),{'a','b'})

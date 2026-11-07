@@ -1,11 +1,11 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import {notFound} from 'next/navigation';
-import {ArrowRight, ArrowDown, ArrowUpRight, CalendarDays, UserRound, Ruler, HelpCircle, Shirt} from 'lucide-react';
+import {ArrowRight, ArrowUpRight, CalendarDays, UserRound, Ruler, HelpCircle, Shirt} from 'lucide-react';
 import {get} from '@/lib/server';
 import {Collection, ProductPage, Facets, Site, CategoryContent} from '@/lib/types';
 import {mainMenu, type MenuItem, type MenuLink} from '@/lib/menu';
-import {Filters, Results} from '@/components/collection-page';
+import {Filters, Results, BandCarousel} from '@/components/collection-page';
 import {CategoryDetails} from '@/components/category-details';
 import {toParams, occasionImage, type Query} from '@/lib/query';
 
@@ -57,7 +57,12 @@ export default async function CollectionPage({params, searchParams}: Props) {
   const styles = related.length ? related : styleLinks(site?.menu?.length ? site.menu : mainMenu, base);
   // Occasion cards: occasions that have products here; if none do yet, every active occasion.
   const withProducts = facets.occasions.filter(o => o.count);
-  const occasionCards = (withProducts.length ? withProducts : (site?.occasions || facets.occasions)).slice(0, 4);
+  const occasionCards = (withProducts.length ? withProducts : (site?.occasions || facets.occasions)).slice(0, 6);
+  const others = (site?.collections || []).filter(s => s.slug !== slug);
+  const bandCards = [
+    ...occasionCards.map((o, i) => ({title: `${o.name} ${c.name}`, href: `${base}?occasion=${o.slug}#collection`, image: occasionImage(o, i)})),
+    ...others.map((s, i) => ({title: s.name, href: `/collections/${s.slug}`, image: s.image || STORY_FALLBACK[i % STORY_FALLBACK.length]})),
+  ].slice(0, 10);
   const story = (site?.collections || []).filter(s => s.slug !== slug).slice(0, 3);
   const t = c.content || fallbackContent(c.name), qa = t.faqs, f = t.fitting;
   const faqLd = {'@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: qa.map(x => ({'@type': 'Question', name: x.question, acceptedAnswer: {'@type': 'Answer', text: x.answer}}))};
@@ -65,26 +70,13 @@ export default async function CollectionPage({params, searchParams}: Props) {
   return <div className="cp">
     {qa.length > 0 && <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify(faqLd)}}/>}
 
-    <section className="cp-hero">
-      <Image src={c.image || '/images/collection.webp'} alt="" fill priority sizes="100vw"/>
-      <div className="cp-hero-copy">
-        <nav className="cp-crumbs" aria-label="Breadcrumb"><Link href="/">Home</Link> / <Link href="/products">Collections</Link> / <span>{c.name}</span></nav>
-        <p className="cp-eyebrow">{t.eyebrow}</p>
-        <h1>{c.name}</h1>
-        {t.tagline && <p className="cp-tagline">{t.tagline}</p>}
-        <p className="cp-intro">{c.description || `Discover embroidered ${c.name.toLowerCase()}, graceful silhouettes and occasion-ready styles, with personal guidance to help you find your fit.`}</p>
-        <a href="#collection" className="cp-explore">Explore the Collection <ArrowDown size={16}/></a>
-      </div>
-    </section>
+    {bandCards.length > 0 && <section className="az-band" aria-label={`Shop ${c.name}`}><BandCarousel cards={bandCards}/></section>}
 
-    {occasionCards.length > 0 && <section className="cp-wrap cp-occasions">
-      <h2>Shop by Occasion</h2>
-      <div className="cp-occasion-grid">{occasionCards.map((o, i) =>
-        <Link key={o.slug} href={`${base}?occasion=${o.slug}#collection`} className="cp-occasion">
-          <div><Image src={occasionImage(o, i)} alt={`${o.name} ${c.name}`} fill sizes="(max-width:700px) 46vw, 24vw"/></div>
-          <span>{o.name} {c.name} <ArrowRight size={16}/></span>
-        </Link>)}</div>
-    </section>}
+    <div className="cp-wrap az-head">
+      <nav className="cp-crumbs" aria-label="Breadcrumb"><Link href="/">Home</Link><span aria-hidden> / </span><Link href="/products">Collections</Link><span aria-hidden> / </span><span aria-current="page">{c.name}</span></nav>
+      <h1>{c.name} <small>({data.count} {data.count === 1 ? 'item' : 'items'})</small></h1>
+      {t.tagline && <p className="az-tagline">{t.tagline}</p>}
+    </div>
 
     <section id="collection" className="cp-wrap cp-shop">
       <Filters base={base} query={q} styles={styles} facets={facets}/>

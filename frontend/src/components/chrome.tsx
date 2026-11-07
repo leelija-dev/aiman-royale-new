@@ -3,8 +3,8 @@ import Link from 'next/link';
 import {AccountMenu} from '@/components/account-menu';
 import {useEffect, useState} from 'react';
 import {usePathname} from 'next/navigation';
-import {Search, Heart, ShoppingBag, UserRound, Menu, X, CalendarDays, ArrowRight, MessageCircle, ChevronDown, Phone, Mail, MapPin, Check, Banknote, Truck, ShieldCheck, CreditCard, Package, RotateCcw, Lock} from 'lucide-react';
-import {api, err} from '@/lib/client';
+import {Search, Heart, ShoppingBag, UserRound, Menu, X, CalendarDays, ArrowRight, MessageCircle, ChevronDown, Phone, Mail, MapPin, Banknote, Truck, RotateCcw, Ruler, Headset} from 'lucide-react';
+import {api} from '@/lib/client';
 import type {Bag, Site} from '@/lib/types';
 import {mainMenu, FEATURE_FALLBACK, type MenuItem} from '@/lib/menu';
 import {useWishlistCount} from '@/lib/wishlist';
@@ -12,28 +12,38 @@ import {useWishlistCount} from '@/lib/wishlist';
 const badge = (n: number) => n > 99 ? '99+' : String(n);
 
 export function Header({site}: {site: Site}) {
-  const [open, setOpen] = useState(false), [search, setSearch] = useState(false), [count, setCount] = useState(0);
+  const [open, setOpen] = useState(false), [count, setCount] = useState(0);
   const saved = useWishlistCount();
   useEffect(() => {
     const update = () => api<Bag>('cart/').then(b => setCount(b.items.reduce((n, i) => n + i.quantity, 0))).catch(() => {});
     update(); window.addEventListener('bag-changed', update);
     return () => window.removeEventListener('bag-changed', update);
   }, []);
+  // Several announcements can be separated with "|" in the admin; they scroll in a loop.
+  const msgs = (site.announcement || '').split('|').map(m => m.trim()).filter(Boolean);
+  const loop = msgs.length ? Array.from({length: Math.max(2, Math.ceil(6 / msgs.length))}, () => msgs).flat() : [];
+  const searchForm = (cls: string) => <form action="/products" className={`hk-search ${cls}`} role="search">
+    <input name="q" type="search" aria-label="Search products" placeholder="Search for suits, anarkali, gowns…"/>
+    <button type="submit" aria-label="Search"><Search size={18}/></button>
+  </form>;
   return <>
-    <div className="announcement">{site.announcement}<span>Made for your moments</span></div>
-    <header className="header">
-      <button className="icon mobile" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X/> : <Menu/>}</button>
-      <Link href="/" className="brand">Aiman <em>Royale</em></Link>
-      <MainNav items={site.menu?.length ? site.menu : mainMenu} open={open} close={() => setOpen(false)}/>
-      <div className="header-actions">
-        <Link href="/appointment" className="appointment-link"><CalendarDays size={15}/> Book Appointment</Link>
-        <button aria-label="Search" className="icon" onClick={() => setSearch(!search)}><Search/></button>
-        <AccountMenu/>
-        <Link href="/wishlist" className="icon count-icon" aria-label={`Wishlist, ${saved} saved`}><Heart/>{saved > 0 && <b className="count-badge wish">{badge(saved)}</b>}</Link>
-        <Link href="/cart" className="icon count-icon" aria-label={`Shopping bag, ${count} items`}><ShoppingBag/>{count > 0 && <b className="count-badge">{badge(count)}</b>}</Link>
+    {loop.length > 0 && <div className="hk-announce" aria-label="Announcements"><span className="sr-only">{msgs.join('. ')}</span>
+      <div className="hk-track" aria-hidden>{[0, 1].map(k => <div key={k} className="hk-seq">{loop.map((m, i) => <span key={i}>{m}</span>)}</div>)}</div></div>}
+    <header className="hk-header">
+      <div className="hk-row">
+        <button className="icon hk-burger" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X/> : <Menu/>}</button>
+        {searchForm('hk-search-desk')}
+        <Link href="/" className="brand hk-logo" aria-label="Aiman Royale home">Aiman <em>Royale</em></Link>
+        <div className="hk-actions">
+          <Link href="/appointment" className="icon hk-appt" aria-label="Book Appointment" title="Book Appointment"><CalendarDays/></Link>
+          <AccountMenu/>
+          <Link href="/wishlist" className="icon count-icon" aria-label={`Wishlist, ${saved} saved`} title="Wishlist"><Heart/>{saved > 0 && <b className="count-badge wish">{badge(saved)}</b>}</Link>
+          <Link href="/cart" className="icon count-icon" aria-label={`Shopping bag, ${count} items`} title="Bag"><ShoppingBag/>{count > 0 && <b className="count-badge">{badge(count)}</b>}</Link>
+        </div>
       </div>
+      {searchForm('hk-search-mob')}
+      <MainNav items={site.menu?.length ? site.menu : mainMenu} open={open} close={() => setOpen(false)}/>
     </header>
-    {search && <form action="/products" className="search-bar"><Search size={18}/><input autoFocus name="q" aria-label="Search products" placeholder="Find your perfect celebration look…"/><button className="text-button">Search <ArrowRight size={16}/></button></form>}
   </>;
 }
 
@@ -80,68 +90,59 @@ const SOCIAL: Record<string, {label: string; path: string}> = {
   pinterest: {label: 'Pinterest', path: 'M12.3 2C6.8 2 4 5.9 4 9.2c0 2 .8 3.7 2.4 4.4.3.1.5 0 .6-.3l.2-.9c.1-.3 0-.4-.2-.7a3.4 3.4 0 0 1-.8-2.3 5.6 5.6 0 0 1 5.9-5.7c3.2 0 5 2 5 4.6 0 3.5-1.5 6.4-3.8 6.4a1.9 1.9 0 0 1-1.9-2.3c.4-1.5 1.1-3.2 1.1-4.3a1.6 1.6 0 0 0-1.6-1.8c-1.3 0-2.3 1.3-2.3 3.1a4.6 4.6 0 0 0 .4 1.9l-1.5 6.5a13 13 0 0 0 0 4.5.2.2 0 0 0 .3.1 12 12 0 0 0 2.1-3.8l.8-3.2a3.3 3.3 0 0 0 2.8 1.4c3.7 0 6.2-3.4 6.2-7.9C20.6 5.2 17.3 2 12.3 2Z'},
 };
 
-const SERVICE_ICONS: Record<string, React.ReactNode> = {cod: <Banknote size={20}/>, truck: <Truck size={20}/>, check: <ShieldCheck size={20}/>, card: <CreditCard size={20}/>, box: <Package size={20}/>, return: <RotateCcw size={20}/>};
-const pinkLast = (t: string) => { const w = t.trim().split(' '); const last = w.pop(); return <>{w.join(' ')} <span className="lf-pink">{last}</span></>; };
+const POLICY = /terms|return|refund|privacy|shipping|policy|cancel/i;
+const SERVICES: [React.ReactNode, string, string][] = [[<Headset key="h" size={30} strokeWidth={1.3}/>, '24x7 Customer Support', 'We are here to help'], [<Truck key="t" size={30} strokeWidth={1.3}/>, 'Free Shipping', 'On all prepaid orders'], [<RotateCcw key="r" size={30} strokeWidth={1.3}/>, 'Easy Returns', 'Hassle-free returns'], [<Ruler key="u" size={30} strokeWidth={1.3}/>, 'Custom Fitting', 'Made to your measurements']];
+
+function FooterGroup({id, title, open, toggle, children}: {id: string; title: string; open: string | null; toggle: (k: string) => void; children: React.ReactNode}) {
+  const on = open === id;
+  return <div className={on ? 'kf-group open' : 'kf-group'}>
+    <h4><button type="button" aria-expanded={on} aria-controls={`kf-${id}`} onClick={() => toggle(id)}>{title}<ChevronDown size={18}/></button></h4>
+    <div className="kf-body" id={`kf-${id}`}>{children}</div>
+  </div>;
+}
 
 export function Footer({site}: {site: Site}) {
-  const [message, setMessage] = useState<{ok: boolean; text: string} | null>(null), [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
+  const toggle = (k: string) => setOpen(o => o === k ? null : k);
   const f = site.footer;
   const phone = site.phone.replace(/\D/g, '');
-  const social = Object.entries(site.social || {});
-  const COLS: [string, string][] = [['categories', 'Top Categories'], ['occasions', 'Occasions'], ['explore', 'Explore'], ['account', 'My Account']];
+  const social = Object.entries(site.social || {}).filter(([k]) => SOCIAL[k]);
+  const links = (k: string) => f?.links[k] || [];
+  const explore = links('explore');
+  const uniq = (l: {label: string; href: string}[]) => l.filter((x, i) => l.findIndex(y => y.href === x.href) === i);
+  const groups: [string, string, {label: string; href: string}[]][] = [
+    ['designer', 'Designer Wear', uniq([...links('categories'), ...links('occasions'), {label: 'All Products', href: '/products'}])],
+    ['about', 'About Us', uniq([...explore.filter(l => !POLICY.test(l.label + l.href)), {label: 'Book an Appointment', href: '/appointment'}, {label: 'Track Your Order', href: '/track'}])],
+    ['policies', 'Policies', uniq([...explore.filter(l => POLICY.test(l.label + l.href)), {label: 'Shipping Policy', href: '/info/shipping'}, {label: 'Size Guide', href: '/info/size-guide'}])],
+    ['account', 'My Account', uniq([...links('account'), {label: 'Order History', href: '/account/orders'}])],
+  ];
+  const list = (l: {label: string; href: string}[]) => <ul>{l.map(x => <li key={x.label + x.href}><Link href={x.href}>{x.label}</Link></li>)}</ul>;
   return <>
-    <footer className="lf" aria-label="Site footer">
-      <div className="lf-wrap">
-        <div className="lf-top">
-          <section className="lf-news" aria-labelledby="lf-news-title">
-            <p className="lf-eyebrow"><span className="lf-dot"/>{f?.newsletter.eyebrow || 'Never miss an update'}</p>
-            <h2 id="lf-news-title">{pinkLast(f?.newsletter.title || 'Subscribe to Our Newsletter')}</h2>
-            {f?.newsletter.text && <p className="lf-muted">{f.newsletter.text}</p>}
-            <form className="lf-form" onSubmit={async e => {
-              e.preventDefault(); setBusy(true); setMessage(null); const form = e.currentTarget; const d = new FormData(form);
-              try { await api('subscribe/', 'POST', {email: d.get('email'), consent: true}); setMessage({ok: true, text: 'You’re on the list. Thank you!'}); form.reset(); }
-              catch (e2) { setMessage({ok: false, text: err(e2)}); } finally { setBusy(false); }
-            }}>
-              <div className="lf-row"><input required type="email" name="email" autoComplete="email" aria-label="Your email address" placeholder="Your email address"/>
-                <button disabled={busy}>{busy ? 'Please wait…' : <>Subscribe Now <ArrowRight size={16}/></>}</button></div>
-              <label className="lf-consent"><input required type="checkbox"/> I agree to receive email updates. <Link href="/info/privacy">Privacy policy</Link></label>
-              {message && <p className={message.ok ? 'lf-msg ok' : 'lf-msg'} role="status">{message.ok && <Check size={16}/>}{message.text}</p>}
-            </form>
-          </section>
-          {f && f.instagram.posts.length > 0 && <section className="lf-insta" aria-labelledby="lf-insta-title">
-            <p className="lf-handle"><span className="lf-ig"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden><path d={SOCIAL.instagram.path}/></svg></span>{f.instagram.handle}</p>
-            <h2 id="lf-insta-title">{pinkLast('Follow Our Instagram')}</h2>
-            <div className="lf-posts">{f.instagram.posts.slice(0, 4).map((p, i) => <a key={i} href={p.href || f.instagram.url} target="_blank" rel="noopener noreferrer" aria-label={p.caption || 'Instagram post'}><img src={p.image} alt={p.caption} loading="lazy" width={120} height={120}/></a>)}</div>
-            {f.instagram.note && <p className="lf-note">{f.instagram.note}</p>}
-          </section>}
-        </div>
-
-        <div className="lf-brand">
-          <div><Link href="/" className="brand">Aiman <em>Royale</em></Link>{f?.about && <p className="lf-muted">{f.about}</p>}</div>
-          {social.length > 0 && <div className="lf-social">{social.map(([k, url]) => SOCIAL[k] && <a key={k} href={url} target="_blank" rel="noopener noreferrer" aria-label={SOCIAL[k].label}><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden><path d={SOCIAL[k].path}/></svg></a>)}</div>}
-        </div>
-
-        <div className="lf-cols">
-          {COLS.map(([k, title]) => (f?.links[k] || []).length > 0 && <nav key={k} aria-label={title}><h4>{title}</h4><ul>{f!.links[k].map(l => <li key={l.label + l.href}><Link href={l.href}>{l.label}</Link></li>)}</ul></nav>)}
-          <div className="lf-contact"><h4>Contact Info</h4>
-            {site.address && <p><span className="lf-ico"><MapPin size={16}/></span><span><strong>Our Location</strong>{site.address}</span></p>}
-            {phone && <p><span className="lf-ico"><Phone size={16}/></span><span><strong>Call Us</strong><a href={`tel:+${phone}`}>+{phone}</a></span></p>}
-            {site.email && <p><span className="lf-ico"><Mail size={16}/></span><span><strong>Email Us</strong><a href={`mailto:${site.email}`}>{site.email}</a></span></p>}
+    <footer className="kf" aria-label="Site footer">
+      <div className="kf-wrap">
+        <div className="kf-cols">
+          {groups.map(([id, title, l]) => l.length > 0 && <FooterGroup key={id} id={id} title={title} open={open} toggle={toggle}><nav aria-label={title}>{list(l)}</nav></FooterGroup>)}
+          <div className="kf-side">
+            {f && f.payments.length > 0 && <FooterGroup id="pay" title="Safe & Secure Payment" open={open} toggle={toggle}><div className="kf-pay">{f.payments.map(m => <span key={m}>{m}</span>)}</div>{f.payments.some(m => /cod|cash/i.test(m)) && <p className="kf-note"><Banknote size={14}/> Cash on Delivery available</p>}</FooterGroup>}
+            {social.length > 0 && <FooterGroup id="follow" title="Follow Us" open={open} toggle={toggle}><div className="kf-social">{social.map(([k, url]) => <a key={k} href={url} target="_blank" rel="noopener noreferrer" aria-label={SOCIAL[k].label}><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden><path d={SOCIAL[k].path}/></svg></a>)}</div></FooterGroup>}
+            {phone && <FooterGroup id="chat" title="Chat With Us" open={open} toggle={toggle}><p className="kf-contact"><a href={`https://wa.me/${phone}`} target="_blank" rel="noopener noreferrer"><MessageCircle size={16}/> WhatsApp</a><a href={`tel:+${phone}`}><Phone size={16}/> +{phone}</a></p></FooterGroup>}
+            {site.email && <FooterGroup id="mail" title="Email Us On" open={open} toggle={toggle}><p className="kf-contact"><a href={`mailto:${site.email}`}><Mail size={16}/> {site.email}</a></p></FooterGroup>}
           </div>
         </div>
 
-        {f && (f.highlights.length > 0 || f.payments.length > 0) && <div className="lf-info">
-          <div className="lf-highlights">{f.highlights.map(h => <div key={h.title}><h5>{h.title}</h5><p>{h.text}</p></div>)}</div>
-          {(f.payments.length > 0 || f.delivery.length > 0) && <div className="lf-pay">
-            {f.payments.length > 0 && <><p className="lf-pay-title"><Lock size={14}/> Safe &amp; Secure Payment <em>trusted</em></p><div className="lf-chips">{f.payments.map(m => <span key={m}>{m}</span>)}</div></>}
-            {f.delivery.length > 0 && <><p className="lf-pay-title"><Truck size={14}/> Delivery Partners</p><div className="lf-chips">{f.delivery.map(m => <span key={m}>{m}</span>)}</div></>}
-            {f.payments.some(m => /cod|cash/i.test(m)) && <p className="lf-cod"><Banknote size={14}/> Cash on Delivery available</p>}
-          </div>}
-        </div>}
+        {f && f.highlights.length > 0 && <div className="kf-rows">{f.highlights.map(h => {
+          const words = h.text.split(/[,|]/).map(w => w.trim()).filter(Boolean);
+          return <FooterGroup key={h.title} id={`h-${h.title}`} title={h.title} open={open} toggle={toggle}>
+            <p>{words.map((w, i) => <span key={w}>{i > 0 && <i aria-hidden> | </i>}<Link href={`/products?q=${encodeURIComponent(w)}`}>{w}</Link></span>)}</p>
+          </FooterGroup>;
+        })}</div>}
 
-        {f && f.services.length > 0 && <ul className="lf-services">{f.services.map(sv => <li key={sv.title}><span>{SERVICE_ICONS[sv.icon] || <Check size={20}/>}</span><strong>{sv.title}</strong><small>{sv.text}</small></li>)}</ul>}
+        <ul className="kf-services">{SERVICES.map(([ico, t, sm]) => <li key={t}><span>{ico}</span><strong>{t}</strong><small>{sm}</small></li>)}</ul>
 
-        <div className="lf-bottom"><p>© {new Date().getFullYear()} Aiman Royale. All rights reserved.</p>{f?.note && <small>{f.note}</small>}</div>
+        <div className="kf-bottom">
+          {site.address && <p className="kf-addr"><MapPin size={14}/> {site.address}</p>}
+          <p>© {new Date().getFullYear()} Aiman Royale. All rights reserved.</p>
+        </div>
       </div>
     </footer>
     {phone && <a className="whatsapp-float" href={`https://wa.me/${phone}`} target="_blank" rel="noopener noreferrer" aria-label="Chat with Aiman Royale on WhatsApp"><MessageCircle size={23}/></a>}

@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from rest_framework.exceptions import NotFound,NotAuthenticated
 from django.db import transaction,IntegrityError
-from django.db.models import Q,Count,Min,Max,Avg
+from django.db.models import Q,Count,Min,Max,Avg,F
 from django.utils.text import slugify
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
@@ -218,6 +218,10 @@ def products(request,slug=None):
         page=max(1,int(p.get('page','1')))
     except (ValueError,ArithmeticError):raise ValidationError('Invalid filter value.')
     if p.get('featured')=='1':q=q.filter(featured=True)
+    # Quick filter chips on category pages
+    if p.get('custom')=='1':q=q.filter(custom_fit=True)
+    if p.get('sale')=='1':q=q.filter(mrp__gt=F('price'))
+    if p.get('ready')=='1':q=q.filter(variants__stock__gt=0).distinct()
     order={'price-asc':'price','price-desc':'-price','newest':'-created_at','name':'name'}.get(p.get('sort'),'-featured')
     wanted=[slugify(v) for v in p.getlist('occasion') if v]
     if wanted:q=q.filter(occasions__slug__in=wanted,occasions__active=True)
