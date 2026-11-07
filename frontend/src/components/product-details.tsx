@@ -174,7 +174,7 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
   const mainBtn = useRef<HTMLDivElement>(null), [showBar, setShowBar] = useState(false);
   useEffect(() => {
     const el = mainBtn.current; if (!el || typeof IntersectionObserver === 'undefined') return;
-    const o = new IntersectionObserver(([e]) => setShowBar(!e.isIntersecting && e.boundingClientRect.top < 0)); o.observe(el); return () => o.disconnect();
+    const o = new IntersectionObserver(([e]) => setShowBar(!e.isIntersecting)); o.observe(el); return () => o.disconnect();
   }, []);
   // Remember this product for "Recently Viewed".
   useEffect(() => { rememberViewed({slug: p.slug, name: p.name, price: p.price, mrp: p.mrp, image: images[0]?.url || ''}); }, [p.slug]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -267,10 +267,14 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
 
     <ReviewsBlock slug={p.slug} section/>
 
-    <div className={showBar ? 'az-bar show' : 'az-bar'} aria-hidden={!showBar}>
-      <Image src={images[0].url} alt="" width={44} height={58}/>
-      <div><strong>{p.name}</strong><span>{money(p.price)}</span></div>
-      {addButton('az-bar-btn')}
+    <div className={showBar ? 'az-bar show' : 'az-bar'} aria-hidden={!showBar} inert={!showBar}>
+      <div className="az-bar-in">
+        <Image src={images[0].url} alt="" width={40} height={54}/>
+        <div className="az-bar-txt"><strong>Aiman Royale</strong><span>{p.name}</span></div>
+        {type === 'custom'
+          ? <button type="button" className="az-bar-btn" disabled={!!busy} onClick={() => setCustomize(true)}><Ruler size={18}/>Customize</button>
+          : <button type="button" className="az-bar-btn" disabled={!!busy} onClick={onBuyNow}><ShoppingBag size={18}/>{busy === 'buy' ? 'Please wait…' : 'Buy Now'}</button>}
+      </div>
     </div>
 
     {customDone && <div className="pd-modal" role="dialog" aria-modal="true" aria-labelledby="pd-custom-title" onClick={e => { if (e.target === e.currentTarget) setCustomDone(false); }}>

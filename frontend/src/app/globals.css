@@ -1930,11 +1930,6 @@ input:focus,select:focus,textarea:focus{outline:1px solid #a10000;border-color:#
 .az-bar{position:fixed;left:0;right:0;bottom:0;z-index:45;background:#fff;border-top:1px solid #f6d5df;box-shadow:0 -6px 20px #0000001a;display:flex;align-items:center;gap:14px;padding:10px 4%;transform:translateY(110%);transition:transform .25s}
 .az-bar.show{transform:none}
 .az-bar img{border-radius:4px;object-position:top}
-.az-bar>div{flex:1;min-width:0;display:flex;flex-direction:column}
-.az-bar strong{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.az-bar span{font-size:14px;font-weight:600}
-.az-bar .pd-btn{min-height:44px;border-radius:2px;font-size:13px;letter-spacing:1px;text-transform:uppercase;padding:10px 30px;background:#a10000;border:0;color:#fff;box-shadow:none}
-.az-bar .pd-btn:after{display:none}
 body:has(.az-bar.show) .whatsapp-float{bottom:84px}
 .pd-page .pd-measure-cta,.pd-page .pd-reviews.pd-section{max-width:1500px;margin-left:auto;margin-right:auto}
 @media(max-width:1100px){.az-similar{grid-template-columns:repeat(3,minmax(0,1fr))}}
@@ -1953,3 +1948,17 @@ body:has(.az-bar.show) .whatsapp-float{bottom:84px}
 .az-shots.odd>.az-shot:last-child:not(:first-child){grid-column:1/-1;aspect-ratio:3/2}
 @media(max-width:860px){.az-shots.one{max-width:none}.az-shots .az-shot{aspect-ratio:3/4!important}.az-shots.one .az-shot{flex-basis:100%}}
 .kf .kf-services{padding:30px 0}@media(max-width:760px){.kf .kf-services{padding:24px 0}}
+
+/* Product panel: keep its own scrolling but hide the scrollbar */
+.az-panel{scrollbar-width:none;-ms-overflow-style:none;padding-right:0}
+.az-panel::-webkit-scrollbar{display:none;width:0;height:0}
+/* Floating Buy Now bar (centred, like the reference) */
+.az-bar{display:block;padding:9px 4%;gap:0}
+.az-bar-in{display:flex;align-items:center;gap:14px;max-width:700px;margin:auto}
+.az-bar-in img{border-radius:3px;object-position:top;flex-shrink:0}
+.az-bar-txt{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.35}
+.az-bar-txt strong{font-size:14px;font-weight:600;color:#000}
+.az-bar-txt span{font-size:13px;font-weight:400;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.az-bar-btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-width:226px;height:44px;padding:0 26px;border:0;border-radius:6px;background:#a10000;color:#fff;font-size:16px;font-weight:500;letter-spacing:.3px;transition:background .2s}
+.az-bar-btn:hover:not(:disabled){background:#7a0000}
+@media(max-width:600px){.az-bar-btn{min-width:0;padding:0 18px;font-size:15px}.az-bar-txt span{font-size:12px}}
