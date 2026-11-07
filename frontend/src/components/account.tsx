@@ -204,7 +204,7 @@ export function WishlistPage() {
 
 /* ---------- Custom (made-to-measure) requests ---------- */
 type CustomReq = {id: number; ref: string; product: {name: string; slug: string; image: string; price: string}; size: string; colour: string;
-  measurements: Record<string, number | string>; quantity: number; note: string; status: string; price: string | null; total: string | null; admin_note: string; order: string; created_at: string};
+  measurements: Record<string, number | string>; options: Record<string, string>; quantity: number; note: string; status: string; price: string | null; total: string | null; admin_note: string; order: string; created_at: string};
 const CR_LABEL: Record<string, string> = {requested: 'Requested', accepted: 'Accepted', rejected: 'Not possible', cancelled: 'Cancelled', ordered: 'Ordered'};
 function CustomRequests() {
   const [list, setList] = useState<CustomReq[] | null>(null), [busy, setBusy] = useState(0), [error, setError] = useState('');
@@ -220,7 +220,9 @@ function CustomRequests() {
   return <div className="cr-list">{list.map(r => { const u = String(r.measurements.unit || 'cm'); return <article key={r.id} className="cr-card">
     <Link href={`/products/${r.product.slug}`} className="cr-img">{r.product.image && <Image src={r.product.image} alt={r.product.name} fill sizes="90px"/>}</Link>
     <div className="cr-main"><h3><Link href={`/products/${r.product.slug}`}>{r.product.name}</Link></h3><p>Request ID: #{r.ref}{r.quantity > 1 ? ` · Qty ${r.quantity}` : ''}</p><small>{fmtDate(r.created_at, true)}</small></div>
-    <div className="cr-measure"><h4>Custom Measurements</h4><dl>{['bust', 'waist', 'hip', 'armhole'].map(k => <div key={k}><dt>{k[0].toUpperCase() + k.slice(1)}:</dt><dd>{r.measurements[k]}{u}</dd></div>)}</dl>
+    <div className="cr-measure"><h4>Custom Measurements</h4><dl>{Object.entries(r.measurements).filter(([k]) => k !== 'unit').map(([k, v]) => <div key={k}><dt>{(k[0].toUpperCase() + k.slice(1)).replace('_', ' ')}:</dt><dd>{v}{u}</dd></div>)}</dl>
+      {Object.keys(r.options || {}).length > 0 && <ul className="cr-opts">{Object.entries(r.options).map(([k, v]) => <li key={k}><strong>{({neckline: 'Neckline', back: 'Back design', colour: 'Colour', extra: 'Other'} as Record<string, string>)[k] || k}:</strong> {v}</li>)}</ul>}
+      {r.size && <p className="cr-colour">Base size: <strong>{r.size}</strong></p>}
       {r.colour && <p className="cr-colour">Colour: <strong>{r.colour}</strong></p>}</div>
     <div className="cr-side"><span className={`cr-pill ${r.status}`}>{CR_LABEL[r.status] || r.status}</span>
       {r.price && r.status !== 'rejected' && <p className="cr-price">{money(r.total || r.price)}<small>{r.quantity > 1 ? ` (${money(r.price)} each)` : ''}</small></p>}

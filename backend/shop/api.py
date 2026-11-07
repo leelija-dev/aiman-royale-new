@@ -657,11 +657,12 @@ def calendly_booked(request):
 def custom_data(r):
     p=ProductSerializer(r.product).data
     return {'id':r.pk,'ref':f'{r.pk:06d}','product':{'name':p['name'],'slug':p['slug'],'image':(p['images'][0]['url'] if p['images'] else ''),'price':p['price']},
-            'variant':r.variant_id,'size':r.variant.size if r.variant_id else '','colour':r.colour,'measurements':r.measurements,'quantity':r.quantity,'note':r.note,
+            'variant':r.variant_id,'size':r.variant.size if r.variant_id else '','colour':r.colour,'measurements':r.measurements,'options':r.options,'quantity':r.quantity,'note':r.note,
             'status':r.status,'price':r.price,'total':rupees(r.price)*r.quantity if r.price else None,'admin_note':r.admin_note,
             'order':str(r.order_id) if r.order_id else '','created_at':r.created_at}
 
 MEASURE_KEYS=['bust','waist','hip','armhole']
+OPTIONAL_MEASURES=['shoulder','height','sleeve','top_length','bottom_length','blouse_length']
 @api_view(['GET','POST'])
 @permission_classes([IsAuthenticated])
 def custom_requests(request):
@@ -671,15 +672,23 @@ def custom_requests(request):
         if not p:raise ValidationError('Product not found.')
         if not p.custom_fit:raise ValidationError('Custom measurements are not available for this product.')
         m=d.get('measurements') or {}
-        try:
-            clean={k:round(float(m[k]),2) for k in MEASURE_KEYS}
-            if any(not 5<=v<=250 for v in clean.values()) or m.get('unit') not in ('cm','in'):raise ValueError()
-        except (KeyError,TypeError,ValueError):raise ValidationError('Enter all measurements and a valid unit.')
+        if m.get('unit') not in ('cm','in'):raise ValidationError('Choose inches or cm.')
+        clean={}
+        for k in MEASURE_KEYS+OPTIONAL_MEASURES:
+            v=m.get(k)
+            if v in (None,''):continue
+            try:v=round(float(v),2)
+            except (TypeError,ValueError):raise ValidationError(f'Enter a number for {k.replace("_"," ")}.')
+            if not 1<=v<=300:raise ValidationError(f'Check the {k.replace("_"," ")} measurement.')
+            clean[k]=v
+        o=d.get('options') or {}
+        opts={k:str(o.get(k,'') or '').strip()[:500] for k in ('neckline','back','colour','extra') if str(o.get(k,'') or '').strip()}
+        if not clean and not opts:raise ValidationError('Enter at least one measurement or customisation.')
         clean['unit']=m['unit']
         v=p.variants.filter(pk=d.get('variant')).first() if d.get('variant') else None
         try:qty=max(1,min(10,int(d.get('quantity',1))))
         except (TypeError,ValueError):qty=1
-        r=CustomRequest.objects.create(user=request.user,product=p,variant=v,colour=(v.colour if v else str(d.get('colour','')))[:60],measurements=clean,quantity=qty,note=str(d.get('note','') or '')[:1000])
+        r=CustomRequest.objects.create(user=request.user,product=p,variant=v,colour=(v.colour if v else str(d.get('colour','')))[:60],measurements=clean,options=opts,quantity=qty,note=str(d.get('note','') or '')[:1000])
         return Response(custom_data(r),status=201)
     q=CustomRequest.objects.filter(user=request.user).select_related('product','variant').prefetch_related('product__images','product__variants','product__collections','product__occasions')
     return Response([custom_data(r) for r in q])

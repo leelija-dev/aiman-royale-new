@@ -229,8 +229,8 @@ class CustomRequestAdmin(admin.ModelAdmin):
     list_display=['ref','customer','product','sizes','colour','quantity','price','status','created_at']
     list_editable=['price','status'];list_filter=['status','created_at'];list_display_links=['ref']
     search_fields=['id','user__email','user__first_name','product__name','colour']
-    readonly_fields=['user','product','variant','colour','measurements_view','quantity','note','order','created_at','updated_at']
-    fields=['user','product','variant','colour','measurements_view','quantity','note','price','status','admin_note','order','created_at','updated_at']
+    readonly_fields=['user','product','variant','colour','measurements_view','options_view','quantity','note','order','created_at','updated_at']
+    fields=['user','product','variant','colour','measurements_view','options_view','quantity','note','price','status','admin_note','order','created_at','updated_at']
     actions=['export_csv']
     @admin.display(description='Request',ordering='id')
     def ref(self,r):return f'#{r.pk:06d}'
@@ -239,8 +239,12 @@ class CustomRequestAdmin(admin.ModelAdmin):
     @admin.display(description='Measurements')
     def sizes(self,r):
         m=r.measurements or {};u=m.get('unit','cm')
-        return ' · '.join(f'{k.title()} {m[k]}{u}' for k in ['bust','waist','hip','armhole'] if k in m)
+        return ' · '.join(f'{k.replace("_"," ").title()} {m[k]}{u}' for k in ['bust','waist','hip','armhole','shoulder','height','sleeve','top_length','bottom_length','blouse_length'] if k in m)
     measurements_view=sizes
+    @admin.display(description='Customisations')
+    def options_view(self,r):
+        o=r.options or {};names={'neckline':'Neckline','back':'Back design','colour':'Colour','extra':'Other requests'}
+        return ' · '.join(f'{names.get(k,k)}: {v}' for k,v in o.items()) or '—'
     def has_add_permission(self,request):return False
     def save_model(self,request,obj,form,change):
         before=CustomRequest.objects.filter(pk=obj.pk).values_list('status',flat=True).first()
@@ -290,3 +294,6 @@ class ShippingLabelAdmin(admin.ModelAdmin):
                 if not slip['links'] and not slip['packages']:messages.warning(request,'Delhivery returned no label for these waybill numbers.')
             except delhivery.DelhiveryError as e:messages.error(request,str(e))
         return TemplateResponse(request,'admin/shop/shipping_label.html',ctx)
+
+
+from . import admin_dashboard  # noqa: E402,F401  (dashboard, pickup requests, returns)
