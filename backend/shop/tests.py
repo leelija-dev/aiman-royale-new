@@ -712,3 +712,21 @@ class QuickFilterTests(TestCase):
         b=Product.objects.create(name='B',slug='b',price='100',mrp='100',custom_fit=False);Variant.objects.create(product=b,sku='B1',size='M',colour='Red',stock=0)
         slugs=lambda q:{x['slug'] for x in APIClient().get('/api/products/?'+q).data['results']}
         self.assertEqual(slugs('custom=1'),{'a'});self.assertEqual(slugs('sale=1'),{'a'});self.assertEqual(slugs('ready=1'),{'a'});self.assertEqual(slugs(''),{'a','b'})
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'])
+class HomeOccasionsSeoTests(TestCase):
+    def test_occasion_cards_and_seo_fields(self):
+        cache.clear()
+        from shop.models import Occasion,HomeSection,HomeCard
+        Occasion.objects.all().delete();HomeSection.objects.all().delete()
+        for i,n in enumerate(['Haldi','Wedding']):Occasion.objects.create(name=n,slug=n.lower(),sort_order=i)
+        Occasion.objects.create(name='Old',slug='old',active=False)
+        HomeSection.objects.create(kind='occasions',admin_name='Occ',title='Elegance at Every Wear')
+        hero=HomeSection.objects.create(kind='hero',admin_name='Hero',image_path='/images/hero.webp',button_url='/collections/gown',alt_text='Red gown banner',image_title='Gowns')
+        HomeCard.objects.create(section=hero,image_path='/images/b.webp',url='/products?sale=1',alt_text='Sale banner',image_title='Sale')
+        d=APIClient().get('/api/home/').data['sections']
+        occ=next(s for s in d if s['kind']=='occasions');h=next(s for s in d if s['kind']=='hero')
+        self.assertEqual([(c['title'],c['href']) for c in occ['cards']],[('Haldi','/products?occasion=haldi'),('Wedding','/products?occasion=wedding')])
+        self.assertEqual((h['href'],h['alt'],h['image_title']),('/collections/gown','Red gown banner','Gowns'))
+        self.assertEqual((h['cards'][0]['href'],h['cards'][0]['alt'],h['cards'][0]['image_title']),('/products?sale=1','Sale banner','Sale'))

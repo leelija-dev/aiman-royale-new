@@ -1,19 +1,69 @@
 'use client';
 import Link from 'next/link';
 import {AccountMenu} from '@/components/account-menu';
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
+import Image from 'next/image';
+import {useRouter} from 'next/navigation';
 import {usePathname} from 'next/navigation';
-import {Search, Heart, ShoppingBag, UserRound, Menu, X, CalendarDays, ArrowRight, MessageCircle, ChevronDown, Phone, Mail, MapPin, Banknote, Truck, RotateCcw, Ruler, Headset} from 'lucide-react';
+import {Home, LayoutGrid, Search, Heart, ShoppingBag, UserRound, Menu, X, CalendarDays, ArrowRight, MessageCircle, ChevronDown, Phone, Mail, MapPin, Banknote, Truck, RotateCcw, Ruler, Headset} from 'lucide-react';
 import {api} from '@/lib/client';
-import type {Bag, Site} from '@/lib/types';
+import {money, photo, type Bag, type Product, type ProductPage, type Site} from '@/lib/types';
 import {mainMenu, FEATURE_FALLBACK, type MenuItem} from '@/lib/menu';
 import {useWishlistCount} from '@/lib/wishlist';
 
 const badge = (n: number) => n > 99 ? '99+' : String(n);
 
+/** Header search: on focus it opens a panel with trending searches (categories) and top products, updating as you type. */
+function SearchBox({site, cls}: {site: Site; cls: string}) {
+  const [open, setOpen] = useState(false), [q, setQ] = useState(''), [top, setTop] = useState<Product[] | null>(null), [hits, setHits] = useState<Product[] | null>(null);
+  const box = useRef<HTMLFormElement>(null), router = useRouter(), pathname = usePathname();
+  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    if (top === null) api<ProductPage>('products/?featured=1').then(d => setTop(d.results)).catch(() => setTop([]));
+    const out = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', out); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', out); document.removeEventListener('keydown', esc); };
+  }, [open, top]);
+  useEffect(() => {
+    const term = q.trim(); if (term.length < 2) { setHits(null); return; }
+    const t = setTimeout(() => api<ProductPage>(`products/?q=${encodeURIComponent(term)}`).then(d => setHits(d.results)).catch(() => setHits([])), 250);
+    return () => clearTimeout(t);
+  }, [q]);
+  const term = q.trim().toLowerCase();
+  const cats = [...(site.collections || []).map(c => ({label: c.name, href: `/collections/${c.slug}`})), ...(site.occasions || []).map(o => ({label: `${o.name} Collection`, href: `/products?occasion=${o.slug}`}))];
+  const trending = (term ? cats.filter(c => c.label.toLowerCase().includes(term)) : cats).slice(0, 8);
+  const list = (hits ?? top ?? []).slice(0, 8);
+  const submit = (e: React.FormEvent) => { e.preventDefault(); setOpen(false); router.push(q.trim() ? `/products?q=${encodeURIComponent(q.trim())}` : '/products'); };
+  return <form ref={box} action="/products" className={`hk-search ${cls}${open ? ' open' : ''}`} role="search" onSubmit={submit}>
+    <input name="q" type="search" value={q} onChange={e => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} autoComplete="off"
+      onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false); e.currentTarget.blur(); } }}
+      aria-label="Search products" aria-expanded={open} aria-controls={`${cls}-panel`} placeholder="Search for suits, anarkali, gowns…"/>
+    <button type="submit" aria-label="Search"><Search size={18}/></button>
+    {open && <div className="hk-panel" id={`${cls}-panel`}>
+      <div className="hk-panel-in">
+        <div className="hk-trend"><h4>{term ? 'Categories' : 'Trending Searches'}</h4>
+          <ul>{trending.map(c => <li key={c.href}><Link href={c.href} onClick={() => setOpen(false)}>{c.label}</Link></li>)}
+            {term && <li><Link href={`/products?q=${encodeURIComponent(q.trim())}`} onClick={() => setOpen(false)} className="hk-all">Search for “{q.trim()}” <ArrowRight size={15}/></Link></li>}</ul></div>
+        <div className="hk-top"><h4>{hits ? (hits.length ? 'Matching Products' : 'No matching products') : 'Top Products'}</h4>
+          {list.length > 0 ? <div className="hk-top-grid">{list.map(p => { const off = Number(p.mrp) > Number(p.price);
+            return <Link key={p.id} href={`/products/${p.slug}`} onClick={() => setOpen(false)} className="hk-prod">
+              <span><Image src={photo(p)} alt={p.name} fill sizes="(max-width:900px) 40vw, 200px"/></span><strong>{p.name}</strong>
+              <em>{off && <del>{money(p.mrp)}</del>} {money(p.price)}</em></Link>; })}</div>
+            : top === null ? <p className="hk-muted">Loading…</p> : hits ? <p className="hk-muted">Try another word, or browse the categories.</p> : null}
+          {hits && hits.length > 0 && <Link href={`/products?q=${encodeURIComponent(q.trim())}`} onClick={() => setOpen(false)} className="hk-all">View all results <ArrowRight size={15}/></Link>}
+        </div>
+      </div>
+    </div>}
+  </form>;
+}
+
 export function Header({site}: {site: Site}) {
   const [open, setOpen] = useState(false), [count, setCount] = useState(0);
-  const saved = useWishlistCount();
+  const saved = useWishlistCount(), pathname = usePathname();
+  // Phone tab bar (hidden where a page has its own bottom bar: product, checkout, payment).
+  const tabs = !/^\/(products\/|checkout|payment)/.test(pathname);
   useEffect(() => {
     const update = () => api<Bag>('cart/').then(b => setCount(b.items.reduce((n, i) => n + i.quantity, 0))).catch(() => {});
     update(); window.addEventListener('bag-changed', update);
@@ -22,10 +72,7 @@ export function Header({site}: {site: Site}) {
   // Several announcements can be separated with "|" in the admin; they scroll in a loop.
   const msgs = (site.announcement || '').split('|').map(m => m.trim()).filter(Boolean);
   const loop = msgs.length ? Array.from({length: Math.max(2, Math.ceil(6 / msgs.length))}, () => msgs).flat() : [];
-  const searchForm = (cls: string) => <form action="/products" className={`hk-search ${cls}`} role="search">
-    <input name="q" type="search" aria-label="Search products" placeholder="Search for suits, anarkali, gowns…"/>
-    <button type="submit" aria-label="Search"><Search size={18}/></button>
-  </form>;
+  const searchForm = (cls: string) => <SearchBox site={site} cls={cls}/>;
   return <>
     {loop.length > 0 && <div className="hk-announce" aria-label="Announcements"><span className="sr-only">{msgs.join('. ')}</span>
       <div className="hk-track" aria-hidden>{[0, 1].map(k => <div key={k} className="hk-seq">{loop.map((m, i) => <span key={i}>{m}</span>)}</div>)}</div></div>}
@@ -44,6 +91,13 @@ export function Header({site}: {site: Site}) {
       {searchForm('hk-search-mob')}
       <MainNav items={site.menu?.length ? site.menu : mainMenu} open={open} close={() => setOpen(false)}/>
     </header>
+    {tabs && <nav className="mtab" aria-label="Quick links">
+      <Link href="/" className={pathname === '/' ? 'on' : ''}><Home size={21}/>Home</Link>
+      <button type="button" aria-expanded={open} onClick={() => { setOpen(true); window.scrollTo({top: 0, behavior: 'smooth'}); }}><LayoutGrid size={21}/>Categories</button>
+      <Link href="/wishlist" className={pathname === '/wishlist' ? 'on' : ''}><span><Heart size={21}/>{saved > 0 && <b>{badge(saved)}</b>}</span>Wishlist</Link>
+      <Link href="/cart" className={pathname === '/cart' ? 'on' : ''}><span><ShoppingBag size={21}/>{count > 0 && <b>{badge(count)}</b>}</span>Bag</Link>
+      <Link href="/account" className={pathname.startsWith('/account') ? 'on' : ''}><UserRound size={21}/>Account</Link>
+    </nav>}
   </>;
 }
 

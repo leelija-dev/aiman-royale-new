@@ -324,7 +324,7 @@ class HomeSection(models.Model):
     KINDS=[('hero','Hero banner (add cards below for more slides)'),('featured','Featured cards (4 across)'),('collections','Collection tiles'),('cards','Image cards (4 across)'),
            ('products','Product row'),('confidence','Confidence strip'),('mosaic','Wedding mosaic (6 pictures)'),('banner','Wide promo banner'),
            ('strip','Style strip (8 small pictures)'),('benefits','Benefits row'),('consult','Appointment / consultation'),
-           ('notes',"Designer's notes"),('story','Brand story text (with Read more)'),('carousel','Promo banner carousel'),('duo','Two large banners'),('sizeguide','Size guide (chart + how to measure)')]
+           ('notes',"Designer's notes"),('story','Brand story text (with Read more)'),('carousel','Promo banner carousel'),('duo','Two large banners'),('sizeguide','Size guide (chart + how to measure)'),('occasions','Occasion cards (automatic: Haldi, Wedding, Party, Festive…)')]
     kind=models.CharField(max_length=20,choices=KINDS)
     admin_name=models.CharField('Name (admin only)',max_length=80)
     eyebrow=models.CharField('Small heading',max_length=120,blank=True)
@@ -335,6 +335,9 @@ class HomeSection(models.Model):
     button_url=models.CharField(max_length=200,blank=True)
     image=models.ImageField(upload_to='home/',blank=True)
     image_path=models.CharField('…or built-in image',max_length=200,blank=True,help_text='Used when no image is uploaded, e.g. /images/hero.webp')
+    mobile_image=models.ImageField('Mobile picture',upload_to='home/',blank=True,help_text='Optional picture for phones (portrait, e.g. 800×1000). Hero slides only.')
+    alt_text=models.CharField('Image alt text (SEO)',max_length=160,blank=True,help_text='Describes the picture for Google and screen readers.')
+    image_title=models.CharField('Image title (SEO)',max_length=160,blank=True,help_text='Shown as a tooltip when hovering over the picture.')
     product_filter=models.CharField(max_length=200,blank=True,default='featured=1',help_text='Product rows only. e.g. featured=1, sort=newest, collection=lehengas, occasion=wedding')
     product_count=models.PositiveIntegerField(default=4)
     sort_order=models.PositiveIntegerField(default=0)
@@ -356,6 +359,9 @@ class HomeCard(models.Model):
     icon=models.CharField(max_length=20,choices=ICONS,blank=True)
     image=models.ImageField(upload_to='home/',blank=True)
     image_path=models.CharField('…or built-in image',max_length=200,blank=True)
+    mobile_image=models.ImageField('Mobile picture',upload_to='home/',blank=True,help_text='Optional picture for phones (portrait). Hero slides only.')
+    alt_text=models.CharField('Image alt text (SEO)',max_length=160,blank=True)
+    image_title=models.CharField('Image title (SEO)',max_length=160,blank=True)
     sort_order=models.PositiveIntegerField(default=0)
     active=models.BooleanField(default=True)
     class Meta:ordering=['sort_order','id']
