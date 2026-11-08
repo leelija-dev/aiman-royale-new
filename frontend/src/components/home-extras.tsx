@@ -85,7 +85,8 @@ export function NotesCarousel({badge, image, notes}: {badge: string; image: stri
 }
 
 /* ---------- Hero slider (slide 1 = hero section, more slides = its cards in admin) ---------- */
-export type HeroSlide = {eyebrow: string; title: string; subtitle: string; button: {label: string; href: string} | null; image: string};
+export type HeroSlide = {eyebrow: string; title: string; subtitle: string; button: {label: string; href: string} | null; image: string;
+  mobile?: string; alt?: string; imageTitle?: string; href?: string};
 export function HeroSlider({slides}: {slides: HeroSlide[]}) {
   const [i, setI] = useState(0), [paused, setPaused] = useState(false), n = slides.length;
   useEffect(() => {
@@ -96,11 +97,20 @@ export function HeroSlider({slides}: {slides: HeroSlide[]}) {
   const lines = (t: string) => t.split('\n').flatMap((l, k) => k ? [<br key={k}/>, l] : [l]);
   return <section className="luxury-hero hero-slider" aria-roledescription="carousel" aria-label="Featured collections"
     onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}>
-    {slides.map((s, k) => <div key={k} className={`hero-slide${k === i ? ' on' : ''}`} aria-roledescription="slide" aria-label={`${k + 1} of ${n}`} aria-hidden={k !== i}>
-      <Image src={s.image} alt={s.title.replace(/\n/g, ' ') || 'Aiman Royale'} fill priority={k === 0} sizes="100vw" quality={85}/>
-      <div className="hero-copy">{s.eyebrow && <p className="eyebrow">{s.eyebrow}</p>}{k === 0 ? <h1>{lines(s.title)}</h1> : <h2 className="hero-h">{lines(s.title)}</h2>}
-        {s.subtitle && <p>{s.subtitle}</p>}{s.button && <Link className="button" href={s.button.href} tabIndex={k === i ? 0 : -1}>{s.button.label} <ArrowRight size={16}/></Link>}</div>
-    </div>)}
+    {!slides[0]?.title && <h1 className="sr-only">Aiman Royale – designer ethnic wear, salwar kameez, anarkali &amp; gowns</h1>}
+    {slides.map((s, k) => {
+      const title = s.title.replace(/\n/g, ' '), alt = s.alt || title || s.imageTitle || 'Aiman Royale collection';
+      const href = s.href || s.button?.href, text = !!(s.title || s.eyebrow || s.subtitle);
+      const body = <>
+        <Image className={s.mobile ? 'hs-desk' : ''} src={s.image} alt={alt} title={s.imageTitle || undefined} fill priority={k === 0} sizes="100vw" quality={85}/>
+        {s.mobile && <Image className="hs-mob" src={s.mobile} alt={alt} title={s.imageTitle || undefined} fill priority={k === 0} sizes="100vw" quality={85}/>}
+        {text && <div className="hero-copy">{s.eyebrow && <p className="eyebrow">{s.eyebrow}</p>}{k === 0 ? <h1>{lines(s.title)}</h1> : <h2 className="hero-h">{lines(s.title)}</h2>}
+          {s.subtitle && <p>{s.subtitle}</p>}{s.button && <span className="button">{s.button.label} <ArrowRight size={16}/></span>}</div>}
+      </>;
+      return <div key={k} className={`hero-slide${k === i ? ' on' : ''}`} aria-roledescription="slide" aria-label={`${k + 1} of ${n}`} aria-hidden={k !== i}>
+        {href ? <Link href={href} className="hero-link" tabIndex={k === i ? 0 : -1} aria-label={text ? undefined : alt}>{body}</Link> : body}
+      </div>;
+    })}
     {n > 1 && <>
       <button type="button" className="pc-arrow prev" aria-label="Previous slide" onClick={() => setI((i - 1 + n) % n)}><ChevronLeft size={22}/></button>
       <button type="button" className="pc-arrow next" aria-label="Next slide" onClick={() => setI((i + 1) % n)}><ChevronRight size={22}/></button>

@@ -11,9 +11,11 @@ import {PromoCarousel, Scroller, HomeSizeGuide, NotesCarousel, HeroSlider, type 
 export const metadata = {alternates: {canonical: '/'}};
 
 // Content is managed in Django admin → Homepage sections. Sections render in their admin order.
-type Card = {label: string; title: string; text: string; bullets: string[]; caption: string; href: string; button: string; icon: string; image: string};
+type Card = {label: string; title: string; text: string; bullets: string[]; caption: string; href: string; button: string; icon: string; image: string;
+  mobile_image?: string; alt?: string; image_title?: string};
 type Section = {id: number; kind: string; eyebrow: string; title: string; subtitle: string; text: string; button: {label: string; href: string} | null;
-  image: string; product_filter: string; product_count: number; cards: Card[]};
+  image: string; product_filter: string; product_count: number; cards: Card[];
+  href?: string; mobile_image?: string; alt?: string; image_title?: string};
 
 const ICONS = {award: Award, shield: ShieldCheck, truck: Truck, headphones: Headphones, package: PackageCheck, gem: Gem, heart: Heart, star: Star,
   sparkles: Sparkles, calendar: CalendarDays, ruler: Ruler, video: Video, user: UserRound, check: Check} as const;
@@ -41,10 +43,12 @@ function render(s: Section, products: Record<number, ProductPage>, sizeGuide: Si
   const c = s.cards;
   switch (s.kind) {
     case 'hero':
-      return <HeroSlider slides={[{eyebrow: s.eyebrow, title: s.title, subtitle: s.subtitle, button: s.button, image: s.image || '/images/home-hero.webp'},
-        ...c.map(x => ({eyebrow: x.label, title: x.title, subtitle: x.caption || x.text, button: x.button ? {label: x.button, href: x.href || '/products'} : null, image: x.image || '/images/home-hero.webp'}))]}/>;
+      return <div className="lh-hero-wrap"><HeroSlider slides={[
+        ...(s.image || s.title ? [{eyebrow: s.eyebrow, title: s.title, subtitle: s.subtitle, button: s.button, image: s.image || '/images/home-hero.webp', mobile: s.mobile_image, alt: s.alt, imageTitle: s.image_title, href: s.href}] : []),
+        ...c.map(x => ({eyebrow: x.label, title: x.title, subtitle: x.caption || x.text, button: x.button ? {label: x.button, href: x.href || '/products'} : null, image: x.image || '/images/home-hero.webp',
+          mobile: x.mobile_image, alt: x.alt, imageTitle: x.image_title, href: x.href}))]}/></div>;
     case 'featured': // circular "Most Loved" row — shown on phones, like the live site
-      return <Wrap cls="lh-mobile-only"><section className="lh-loved" aria-label={s.title || 'Most loved'}>{c.map(x =>
+      return <Wrap cls="lh-mobile-only lh-loved-wrap"><section className="lh-loved" aria-label={s.title || 'Most loved'}>{c.map(x =>
         <Link key={x.title + x.href} href={x.href || '/products'}><span><Image src={x.image || IMG} alt="" fill sizes="96px"/></span><strong>{x.title}</strong>{x.caption && <small>{x.caption}</small>}</Link>)}</section></Wrap>;
     case 'carousel': // promo banners — shown on phones, like the live site
       return c.length ? <Wrap cls="lh-mobile-only"><PromoCarousel slides={c.map(x => ({title: x.title, image: x.image || IMG, href: x.href || '/products', caption: x.caption}))}/></Wrap> : null;
@@ -57,6 +61,11 @@ function render(s: Section, products: Record<number, ProductPage>, sizeGuide: Si
       return <Wrap><section className="lh-sec"><Head s={s} cls="center"/>
         <Scroller label={s.title}><div className="lh-elegance">{c.map((x, k) => <Link key={x.title + k} href={x.href || '/products'}>
           <span><Image src={x.image || IMG} alt={x.title} fill sizes="140px"/></span><h3>{x.title}</h3><small>{x.caption || 'Explore'} <ArrowRight size={12}/></small></Link>)}</div></Scroller></section></Wrap>;
+    case 'occasions':
+      return c.length ? <Wrap><section className="lh-sec ar-occ"><Head s={s} cls="center"/>
+        <Scroller label={s.title || 'Shop by occasion'}><div className="ar-occ-row">{c.map(x => <Link key={x.href} href={x.href} className="ar-occ-card">
+          <Image src={x.image || IMG} alt={x.alt || x.title} title={x.image_title || undefined} fill sizes="(max-width:700px) 62vw, 25vw"/>
+          <div><h3>{x.title}</h3><span>{x.button || 'Shop Now'}</span></div></Link>)}</div></Scroller></section></Wrap> : null;
     case 'products': {
       const list = products[s.id]?.results.slice(0, s.product_count) || [];
       return list.length ? <ProductRow s={s} list={list}/> : null;

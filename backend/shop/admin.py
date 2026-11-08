@@ -186,13 +186,13 @@ class MenuItemAdmin(admin.ModelAdmin):
     fieldsets=((None,{'fields':('label','url','sort_order','active','auto_styles','show_occasions')}),('Feature picture (right side of the dropdown)',{'fields':('feature_title','feature_image','feature_url')}))
 class HomeCardInline(admin.StackedInline):
     model=HomeCard;extra=0
-    fields=[('title','label','sort_order','active'),('caption','url','button_label','icon'),'text','bullets',('image','image_path')]
+    fields=[('title','label','sort_order','active'),('caption','url','button_label','icon'),'text','bullets',('image','image_path'),'mobile_image',('alt_text','image_title')]
 @admin.register(HomeSection)
 class HomeSectionAdmin(admin.ModelAdmin):
     list_display=['admin_name','kind','title','sort_order','active'];list_editable=['sort_order','active'];list_filter=['kind','active'];inlines=[HomeCardInline]
     fieldsets=((None,{'fields':('admin_name','kind','sort_order','active')}),
                ('Text',{'fields':('eyebrow','title','subtitle','text','button_label','button_url')}),
-               ('Picture',{'fields':('image','image_path')}),
+               ('Picture',{'fields':('image','image_path','mobile_image','alt_text','image_title'),'description':'Hero slides: the whole picture links to the button link (or the slide link). Leave the text fields empty to show only your designed banner picture.'}),
                ('Product rows only',{'fields':('product_filter','product_count')}))
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):

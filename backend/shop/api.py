@@ -85,6 +85,14 @@ def collection_cover(c):
     if c.image:return c.image.url
     im=ProductImage.objects.filter(product__collections=c,product__active=True).order_by('product__created_at','position').first()
     return im.image.url if im and im.image else ''
+def occasion_cover(o,used=None):
+    """Occasion image, or a product photo from that occasion (not already used by another card)."""
+    if o.image:return o.image.url
+    used=used if used is not None else set()
+    ims=ProductImage.objects.filter(product__occasions=o,product__active=True).exclude(image='').order_by('position','-product__featured','product__created_at')
+    pick=next((i for i in ims if i.product_id not in used),None) or ims.first()
+    if not pick:return ''
+    used.add(pick.product_id);return pick.image.url
 def style_collections(url):
     """Collections to list under 'Style' for a menu item: sub-collections first, then collections sharing products."""
     with_products=Collection.objects.filter(active=True,products__active=True).annotate(n=Count('products',filter=Q(products__active=True),distinct=True))
@@ -173,9 +181,16 @@ def home(request):
     for sec in HomeSection.objects.filter(active=True).prefetch_related('cards'):
         out.append({'id':sec.id,'kind':sec.kind,'eyebrow':sec.eyebrow,'title':sec.title,'subtitle':sec.subtitle,'text':sec.text,
                     'button':{'label':sec.button_label,'href':sec.button_url} if sec.button_label else None,'image':img(sec),
+                    'href':sec.button_url,'mobile_image':media_url(sec.mobile_image),'alt':sec.alt_text,'image_title':sec.image_title,
                     'product_filter':sec.product_filter,'product_count':sec.product_count,
                     'cards':[{'label':c.label,'title':c.title,'text':c.text,'bullets':[b.strip() for b in c.bullets.splitlines() if b.strip()],
-                              'caption':c.caption,'href':c.url,'button':c.button_label,'icon':c.icon,'image':img(c)} for c in sec.cards.all() if c.active]})
+                              'caption':c.caption,'href':c.url,'button':c.button_label,'icon':c.icon,'image':img(c),
+                              'mobile_image':media_url(c.mobile_image),'alt':c.alt_text,'image_title':c.image_title} for c in sec.cards.all() if c.active]})
+        if sec.kind=='occasions':
+            # Always the live occasions (Haldi, Wedding, Party, Festive…) from admin → Occasions, in their order.
+            used=set()
+            out[-1]['cards']=[{'label':'','title':o.name,'text':'','bullets':[],'caption':'Shop Now','href':f'/products?occasion={o.slug}','button':'Shop Now','icon':'',
+                               'image':occasion_cover(o,used),'mobile_image':'','alt':f'{o.name} collection','image_title':o.name} for o in Occasion.objects.filter(active=True)]
         if sec.kind=='strip' and not out[-1]['cards']:
             # No cards entered in admin: show the collections that have products, each linking to its own page.
             cols=Collection.objects.filter(active=True,products__active=True).annotate(n=Count('products',distinct=True)).order_by('-n','name')[:8]
