@@ -104,6 +104,33 @@ def style_collections(url):
     children=list(with_products.filter(parent=me).order_by('sort_order','-n','name'))
     shared=list(with_products.filter(products__collections=me).exclude(pk=me.pk).exclude(pk__in=[c.pk for c in children]).exclude(pk=me.parent_id or 0).distinct().order_by('-n','name'))
     return children+shared
+def link_image(url,used=None):
+    """Picture for a menu link: the collection / occasion / product it points to."""
+    from urllib.parse import urlsplit,parse_qs
+    u=urlsplit(url or '');path=u.path.rstrip('/');q=parse_qs(u.query)
+    try:
+        if path.startswith('/collections/'):
+            c=Collection.objects.filter(slug=path.rsplit('/',1)[-1]).first()
+            if c:
+                if c.image and not u.query and used is None:return c.image.url
+                ims=ProductImage.objects.filter(product__collections=c,product__active=True).exclude(image='').order_by('position','-product__featured','id')
+                pick=next((i for i in ims if used is None or i.product_id not in used),None) or ims.first()
+                if pick:
+                    if used is not None:used.add(pick.product_id)
+                    return pick.image.url
+                return collection_cover(c)
+        if q.get('occasion'):
+            o=Occasion.objects.filter(slug=q['occasion'][0]).first()
+            if o:return occasion_cover(o,used)
+        if path.startswith('/products/'):
+            im=ProductImage.objects.filter(product__slug=path.rsplit('/',1)[-1]).order_by('position').first()
+            if im and im.image:return im.image.url
+        im=ProductImage.objects.filter(product__active=True).exclude(product_id__in=used or []).order_by('-product__featured','position','id').first()
+        if im and im.image:
+            if used is not None:used.add(im.product_id)
+            return im.image.url
+    except Exception:pass
+    return ''
 def menu_data():
     """Main menu for the header, managed in admin (Menu items)."""
     occasions=list(Occasion.objects.filter(active=True))
@@ -112,12 +139,14 @@ def menu_data():
         groups={'Style':[],'Occasion':[],'Collection':[]}
         if m.auto_styles:
             groups['Style']=[{'label':c.name,'href':f'/collections/{c.slug}','count':c.n,'image':collection_cover(c)} for c in style_collections(m.url)[:12]]
-        for l in m.links.all():groups[l.group].append({'label':l.label,'href':l.url})
+        used=set()
+        feature=media_url(m.feature_image) or link_image(m.url,used)  # 'See All' card picture, not repeated below
+        for l in m.links.all():groups[l.group].append({'label':l.label,'href':l.url,'image':link_image(l.url,used)})
         if m.show_occasions:
             sep='&' if '?' in m.url else '?'
-            groups['Occasion']+= [{'label':o.name,'href':f'{m.url}{sep}occasion={o.slug}'} for o in occasions]
+            groups['Occasion']+= [{'label':o.name,'href':f'{m.url}{sep}occasion={o.slug}','image':occasion_cover(o,used)} for o in occasions]
         items.append({'label':m.label,'href':m.url,'columns':[{'title':t,'links':ls} for t,ls in groups.items() if ls],
-                      'feature':{'title':m.feature_title or m.label,'image':media_url(m.feature_image),'href':m.feature_url or m.url}})
+                      'feature':{'title':m.feature_title or m.label,'image':feature,'href':m.feature_url or m.url}})
     return items
 @api_view(['GET'])
 def facets(request):

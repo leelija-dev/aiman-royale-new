@@ -8,7 +8,7 @@ import {usePathname} from 'next/navigation';
 import {Home, LayoutGrid, Search, Heart, ShoppingBag, UserRound, Menu, X, CalendarDays, ArrowRight, MessageCircle, ChevronDown, Phone, Mail, MapPin, Banknote, Truck, RotateCcw, Ruler, Headset} from 'lucide-react';
 import {api} from '@/lib/client';
 import {money, photo, type Bag, type Product, type ProductPage, type Site} from '@/lib/types';
-import {mainMenu, FEATURE_FALLBACK, type MenuItem} from '@/lib/menu';
+import {mainMenu, type MenuItem} from '@/lib/menu';
 import {useWishlistCount} from '@/lib/wishlist';
 
 const badge = (n: number) => n > 99 ? '99+' : String(n);
@@ -115,20 +115,22 @@ function MainNav({items, open, close}: {items: MenuItem[]; open: boolean; close:
       return <li key={item.label} onMouseEnter={() => cols.length && show(i)} onFocus={() => cols.length && show(i)} onKeyDown={e => { if (e.key === 'Escape') setActive(null); }}>
         <div className="menu-top"><Link href={item.href} className={current ? 'menu-link current' : 'menu-link'} aria-expanded={cols.length ? active === i : undefined} onClick={done}>{item.label}</Link>
           {cols.length > 0 && <button className="menu-expand" aria-label={`Show ${item.label} menu`} aria-expanded={mobileItem === i} onClick={() => setMobileItem(mobileItem === i ? null : i)}><ChevronDown size={18} className={mobileItem === i ? 'flip' : ''}/></button>}</div>
-        {cols.length > 0 && <div className={`mega${active === i ? ' show' : ''}${mobileItem === i ? ' mobile-show' : ''}`}>
+        {cols.length > 0 && <div className={`mega az-mega${active === i ? ' show' : ''}${mobileItem === i ? ' mobile-show' : ''}`}>
           <div className="mega-inner">
             <div className="mega-tabs" role="tablist" aria-label={`${item.label} menu`}>
-              <p className="mega-kicker">Shop {item.label}</p>
-              {cols.map((c, t) => <button key={c.title} role="tab" type="button" aria-selected={tab === t} className={tab === t ? 'on' : ''} onMouseEnter={() => setTab(t)} onFocus={() => setTab(t)} onClick={() => setTab(t)}>{c.title}<ArrowRight size={15}/></button>)}
-              <Link href={item.href} className="mega-all" onClick={done}>View all {item.label} <ArrowRight size={15}/></Link>
+              {cols.map((c, t) => <button key={c.title} role="tab" type="button" aria-selected={tab === t} className={tab === t ? 'on' : ''} onMouseEnter={() => setTab(t)} onFocus={() => setTab(t)} onClick={() => setTab(t)}>{c.title}</button>)}
+              <Link href={item.href} className="mega-all" onClick={done}>View All</Link>
             </div>
-            <div className="mega-links">{cols.map((c, t) => <div key={c.title} role="tabpanel" className={`mega-panel kind-${c.title.toLowerCase()}${tab === t ? ' on' : ''}`}>
+            <div className="mega-links">{cols.map((c, t) => <div key={c.title} role="tabpanel" className={`mega-panel${tab === t ? ' on' : ''}`}>
               <p className="mega-mobile-title">{c.title}</p>
-              <ul>{c.links.map(l => <li key={l.label + l.href}><Link href={l.href} onClick={done}>
-                {c.title === 'Style' && <span className="mega-thumb">{l.image ? <img src={l.image} alt="" loading="lazy" width={52} height={52}/> : <span>{l.label[0]}</span>}</span>}
-                <span className="mega-text"><span>{l.label}</span>{typeof l.count === 'number' && <small>{l.count} {l.count === 1 ? 'style' : 'styles'}</small>}</span>
-              </Link></li>)}</ul></div>)}</div>
-            {item.feature && <Link href={item.feature.href} className="mega-feature" onClick={done}><img src={item.feature.image || FEATURE_FALLBACK[i % FEATURE_FALLBACK.length]} alt="" loading="lazy" width={260} height={320}/><span><small>Featured</small>{item.feature.title} <ArrowRight size={16}/></span></Link>}
+              <ul className="mega-grid">
+                {t === 0 && <li><Link href={item.href} onClick={done} className="mega-card">
+                  <span className="mega-pic">{(item.feature?.image || c.links[0]?.image) ? <img src={item.feature?.image || c.links[0]?.image} alt="" loading="lazy"/> : <b>{item.label[0]}</b>}</span>
+                  <span className="mega-cap">See All {item.label}</span></Link></li>}
+                {c.links.map(l => <li key={l.label + l.href}><Link href={l.href} onClick={done} className="mega-card">
+                  <span className="mega-pic">{l.image ? <img src={l.image} alt="" loading="lazy"/> : <b>{l.label[0]}</b>}</span>
+                  <span className="mega-cap">{l.label}</span></Link></li>)}
+              </ul></div>)}</div>
           </div>
         </div>}
       </li>;
