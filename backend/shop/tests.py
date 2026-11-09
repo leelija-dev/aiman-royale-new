@@ -730,3 +730,32 @@ class HomeOccasionsSeoTests(TestCase):
         self.assertEqual([(c['title'],c['href']) for c in occ['cards']],[('Haldi','/products?occasion=haldi'),('Wedding','/products?occasion=wedding')])
         self.assertEqual((h['href'],h['alt'],h['image_title'],h['mobile_image']),('/collections/gown','Red gown banner','Gowns','/images/hero-m.webp'))
         self.assertEqual((h['cards'][0]['href'],h['cards'][0]['alt'],h['cards'][0]['image_title']),('/products?sale=1','Sale banner','Sale'))
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'])
+class ProductImageUploadTests(TestCase):
+    def setUp(self):
+        import tempfile;self.media=tempfile.mkdtemp()
+    def _jpeg(self,w,h,noise=True):
+        from io import BytesIO;import os
+        from PIL import Image
+        im=Image.frombytes('RGB',(w,h),os.urandom(w*h*3)) if noise else Image.new('RGB',(w,h),(200,30,30))
+        b=BytesIO();im.save(b,'JPEG',quality=97);return b.getvalue()
+    def test_large_photo_is_accepted_and_resized(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from shop.models import ProductImage
+        from PIL import Image
+        with self.settings(MEDIA_ROOT=self.media):
+            p=Product.objects.create(name='Big',slug='big',price='100',mrp='100')
+            data=self._jpeg(2800,2300);self.assertGreater(len(data),5*1024*1024);self.assertLess(len(data),10*1024*1024)
+            pi=ProductImage(product=p,alt='x',image=SimpleUploadedFile('big.jpg',data,'image/jpeg'))
+            pi.full_clean();pi.save()
+            im=Image.open(pi.image.path);self.assertEqual(max(im.size),2400)
+    def test_over_10mb_is_rejected_with_message(self):
+        from django.core.exceptions import ValidationError
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from shop.models import ProductImage
+        p=Product.objects.create(name='Huge',slug='huge',price='100',mrp='100')
+        f=SimpleUploadedFile('huge.jpg',b'0'*(10*1024*1024+1),'image/jpeg')
+        with self.assertRaisesMessage(ValidationError,'up to 10 MB'):
+            ProductImage(product=p,alt='x',image=f).full_clean()
