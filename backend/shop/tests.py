@@ -796,3 +796,39 @@ class AdminManyPhotosTests(TestCase):
         self.assertEqual(r.status_code,302,errs or [f.errors for fs in (r.context or {}).get('inline_admin_formsets',[]) for f in [fs.formset]])
         self.assertEqual(p.images.count(),10)
         self.assertTrue(all(i.alt=='Many' for i in p.images.all()))
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver','sub.aimanroyale.com'],EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+                   STORAGES={'default':{'BACKEND':'django.core.files.storage.FileSystemStorage'},'staticfiles':{'BACKEND':'django.contrib.staticfiles.storage.StaticFilesStorage'}})
+class GoogleResetPasswordRuleTests(TestCase):
+    def test_redirect_uri_choice(self):
+        from django.test import RequestFactory
+        from shop.api import google_redirect_uri
+        rf=RequestFactory()
+        r=rf.get('/api/auth/google/',HTTP_HOST='sub.aimanroyale.com',HTTP_X_FORWARDED_PROTO='https')
+        with self.settings(GOOGLE_REDIRECT_URI_SET=False,PUBLIC_SITE_URL='http://sub.aimanroyale.com'):
+            self.assertEqual(google_redirect_uri(r),'https://sub.aimanroyale.com/api/auth/google/callback/')
+        with self.settings(GOOGLE_REDIRECT_URI_SET=False,PUBLIC_SITE_URL='http://localhost:3000'):
+            self.assertEqual(google_redirect_uri(r),'https://sub.aimanroyale.com/api/auth/google/callback/')
+        with self.settings(GOOGLE_REDIRECT_URI_SET=True,GOOGLE_REDIRECT_URI='https://example.com/cb/'):
+            self.assertEqual(google_redirect_uri(r),'https://example.com/cb/')
+
+    def test_google_start_sends_and_remembers_redirect(self):
+        with self.settings(GOOGLE_CLIENT_ID='cid',GOOGLE_CLIENT_SECRET='sec',GOOGLE_REDIRECT_URI_SET=False,PUBLIC_SITE_URL='https://sub.aimanroyale.com'):
+            r=self.client.get('/api/auth/google/')
+        self.assertIn('redirect_uri=https%3A%2F%2Fsub.aimanroyale.com%2Fapi%2Fauth%2Fgoogle%2Fcallback%2F',r['Location'])
+        self.assertEqual(self.client.session['google_redirect'],'https://sub.aimanroyale.com/api/auth/google/callback/')
+
+    def test_reset_link_for_google_account(self):
+        from django.core import mail
+        u=Customer(username='g@example.com',email='g@example.com');u.set_unusable_password();u.save()
+        r=self.client.post('/accounts/password_reset/',{'email':'G@example.com'})
+        self.assertEqual(r.status_code,302);self.assertEqual(len(mail.outbox),1);self.assertIn('/accounts/reset/',mail.outbox[0].body)
+        self.assertContains(self.client.get('/accounts/password_reset/'),'Continue with Google instead')
+
+    def test_password_rule_is_only_length(self):
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+        u=Customer(username='ravi@example.com',email='ravi@example.com',first_name='Ravi')
+        for ok in ['password12','ravi@example.com','1234567890']:validate_password(ok,u)
+        with self.assertRaises(ValidationError):validate_password('short1',u)
