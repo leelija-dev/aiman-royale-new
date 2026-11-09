@@ -1,13 +1,63 @@
 from django.contrib import admin
+from django.db import models
 from django.contrib.auth.admin import UserAdmin
 from .models import *
 admin.site.site_header='Aiman Royale · Store Management'
-class ImageInline(admin.TabularInline):model=ProductImage;extra=1
+from django import forms
+
+
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleImageField(forms.ImageField):
+    def __init__(self, *a, **k):
+        k.setdefault('widget', MultipleFileInput(attrs={'accept': 'image/jpeg,image/png,image/webp', 'multiple': True}))
+        super().__init__(*a, **k)
+
+    def clean(self, data, initial=None):
+        one = super().clean
+        if isinstance(data, (list, tuple)):
+            return [one(d, initial) for d in data if d]
+        return [one(data, initial)] if data else []
+
+
+class ProductAdminForm(forms.ModelForm):
+    bulk_photos = MultipleImageField(required=False, label='Add several photos at once',
+        help_text='Select as many photos as you like (JPG, PNG or WebP, up to 10 MB each). Large photos are resized automatically. '
+                  'They are added after the photos below; edit their order and alt text in the Product images list.')
+
+    class Meta:
+        model = Product
+        fields = '__all__'
+
+    def clean_bulk_photos(self):
+        files = self.cleaned_data.get('bulk_photos') or []
+        for f in files:
+            validate_image_size(f)
+        return files
+
+
+class ImageInline(admin.TabularInline):
+    model = ProductImage
+    extra = 3
+    max_num = 50
+    fields = ['image', 'alt', 'position']
+    verbose_name_plural = 'Product images (add as many as you need — "Add another Product image" adds more rows)'
+
 class VariantInline(admin.TabularInline):model=Variant;extra=1
 class ProductFAQInline(admin.TabularInline):
     model=ProductFAQ;extra=1;fields=['question','answer','sort_order','active'];verbose_name_plural='FAQs for this product (shown above the questions shared by all products)'
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
+    form=ProductAdminForm
+    class Media:js=('shop/shrink-uploads.js',)
+    def save_related(self,request,form,formsets,change):
+        super().save_related(request,form,formsets,change)
+        p=form.instance;files=form.cleaned_data.get('bulk_photos') or []
+        start=(p.images.aggregate(m=models.Max('position'))['m'] or 0)+1 if files else 0
+        for n,f in enumerate(files):ProductImage.objects.create(product=p,image=f,alt=p.name,position=start+n)
+        if files:self.message_user(request,f'{len(files)} photo(s) added to {p.name}.')
     list_display=['name','price','active','featured'];list_filter=['active','featured','collections','occasions'];search_fields=['name','slug'];prepopulated_fields={'slug':('name',)};filter_horizontal=['collections','occasions'];inlines=[ImageInline,VariantInline,ProductFAQInline]
 class PageQuestionInline(admin.TabularInline):
     model=PageQuestion;extra=1;fields=['kind','question','answer','sort_order','active'];verbose_name_plural='FAQs & guide entries for this category (leave empty to use the defaults)'
