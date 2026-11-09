@@ -2112,3 +2112,50 @@ body:has(.az-bar.show) .whatsapp-float{bottom:84px}
 /* Hero banners: desktop pictures are 1920×720 (8:3), phone pictures 1080×1350 (4:5) */
 @media(min-width:701px){.lh-hero-wrap .luxury-hero.hero-slider{height:auto;min-height:0;aspect-ratio:8/3;max-height:none}}
 .lh-hero-wrap .hero-slide img{object-position:center}
+
+/* ===== Mega menu (Aza style): pink tab column + picture grid ===== */
+.hk-header .az-mega{background:#fff;border-top:1px solid #f6d5df;box-shadow:0 20px 40px #0000001c;padding:0}
+.az-mega .mega-inner{max-width:1400px;margin:auto;display:grid;grid-template-columns:250px minmax(0,1fr);gap:0;padding:0}
+.az-mega .mega-tabs{background:#fdeef3;border:0;padding:20px 0 22px;gap:2px;min-height:100%}
+.az-mega .mega-tabs button{display:block;border:0;border-radius:0;border-left:3px solid transparent;background:none;box-shadow:none;padding:12px 30px;text-align:left;font:600 14px var(--font-body);letter-spacing:1.1px;text-transform:uppercase;color:#000}
+.az-mega .mega-tabs button.on,.az-mega .mega-tabs button:hover{background:#fff;color:#a10000;border-left-color:#a10000;box-shadow:none}
+.az-mega .mega-all{display:block;margin-top:14px;padding:10px 30px;font-size:12.5px;font-weight:600;letter-spacing:1.1px;text-transform:uppercase;color:#a10000;text-decoration:underline;text-underline-offset:4px}
+.az-mega .mega-links{padding:22px 26px 26px;max-height:min(68vh,560px);overflow-y:auto;scrollbar-width:thin}
+.az-mega .mega-panel ul.mega-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:none;grid-auto-flow:row;gap:20px 14px}
+.az-mega .mega-panel a.mega-card{display:flex;flex-direction:column;align-items:stretch;gap:9px;padding:0;border:0;border-radius:0;background:none;color:#000;font-size:14px}
+.az-mega .mega-panel a.mega-card:hover{background:none;color:#a10000}
+.az-mega .mega-pic{position:relative;display:grid;place-items:center;aspect-ratio:1/1;overflow:hidden;background:#fdeef3}
+.az-mega .mega-pic img{width:100%;height:100%;object-fit:cover;object-position:top;transition:transform .35s}
+.az-mega .mega-card:hover .mega-pic img{transform:scale(1.05)}
+.az-mega .mega-pic b{font:500 38px var(--font-serif);color:#a10000}
+.az-mega .mega-cap{text-align:center;font-size:13.5px;line-height:1.35}
+.az-mega .mega-mobile-title{display:none}
+@media(max-width:1200px){.az-mega .mega-inner{grid-template-columns:210px minmax(0,1fr)}.az-mega .mega-panel ul.mega-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:900px){
+ .az-mega .mega-inner{display:block}
+ .az-mega .mega-tabs{display:none}
+ .az-mega .mega-links{padding:4px 0 12px;max-height:none;overflow:visible}
+ .az-mega .mega-panel,.az-mega .mega-panel.on{display:block;margin-top:8px}
+ .az-mega .mega-mobile-title{display:block;font-size:12px;letter-spacing:1.3px;text-transform:uppercase;color:#a10000;font-weight:600;margin:6px 0 10px}
+ .az-mega .mega-panel ul.mega-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 10px}
+ .az-mega .mega-cap{font-size:12px}
+ .az-mega .mega-pic b{font-size:26px}
+}
+
+/* ===== Checkout / bag on phones: never wider than the screen ===== */
+.co-grid>*,.bag-grid>*,.co-card,.co-summary{min-width:0}
+.co-card,.co-summary,.bag-summary{overflow-wrap:anywhere}
+@media(max-width:1000px){.co-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){
+ .co-page{overflow-x:clip}
+ .co-grid{padding:0 4%;gap:14px}
+ .co-card{padding:16px 14px;border-radius:8px}
+ .co-summary{padding:16px 14px}
+ .co-top{padding-left:4%;padding-right:4%;gap:8px}
+ .co-top h1{font-size:22px}
+ .co-card h2{font-size:17px}
+ .co-terms{align-items:flex-start;gap:8px;font-size:13px}
+ .co-terms span{min-width:0}
+ .co-pay{width:100%;white-space:normal}
+ .co-card .co-step,.co-card [class*=edit]{flex-shrink:0}
+}
