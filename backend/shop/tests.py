@@ -198,7 +198,8 @@ class MultiValueFilterTests(TestCase):
         menu=self.client.get('/api/site/').json()['menu']
         self.assertEqual(menu[0]['label'],'Gown')
         self.assertEqual([c['title'] for c in menu[0]['columns']],['Style','Occasion'])
-        self.assertIn({'label':'Mehendi','href':'/collections/gown-test?occasion=mehendi'},menu[0]['columns'][1]['links'])
+        self.assertIn({'label':'Mehendi','href':'/collections/gown-test?occasion=mehendi'},[{k:l[k] for k in ('label','href')} for l in menu[0]['columns'][1]['links']])
+        self.assertTrue(all('image' in l for c in menu[0]['columns'] for l in c['links']))
 
 
 class CategoryContentTests(TestCase):
