@@ -44,7 +44,8 @@ TEMPLATES=[{'BACKEND':'django.template.backends.django.DjangoTemplates','DIRS':[
 WSGI_APPLICATION='config.wsgi.application'
 DATABASES={'default':dj_database_url.config(default=f'sqlite:///{BASE_DIR}/db.sqlite3',conn_max_age=60)}
 AUTH_USER_MODEL='shop.Customer'
-AUTH_PASSWORD_VALIDATORS=[{'NAME':'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},{'NAME':'django.contrib.auth.password_validation.MinimumLengthValidator','OPTIONS':{'min_length':10}},{'NAME':'django.contrib.auth.password_validation.CommonPasswordValidator'},{'NAME':'django.contrib.auth.password_validation.NumericPasswordValidator'}]
+# Passwords: at least 10 characters (no common-password or name/email checks).
+AUTH_PASSWORD_VALIDATORS=[{'NAME':'django.contrib.auth.password_validation.MinimumLengthValidator','OPTIONS':{'min_length':10}}]
 LANGUAGE_CODE='en-in'
 TIME_ZONE='Asia/Kolkata'
 USE_I18N=True
@@ -135,6 +136,7 @@ CALENDLY_TOKEN=os.getenv('CALENDLY_TOKEN','').strip().strip('"')
 # Google Cloud Console → Credentials → your OAuth client → Authorised redirect URIs.
 GOOGLE_CLIENT_ID=os.getenv('GOOGLE_CLIENT_ID','').strip().strip('"')
 GOOGLE_CLIENT_SECRET=os.getenv('GOOGLE_CLIENT_SECRET','').strip().strip('"')
+GOOGLE_REDIRECT_URI_SET=bool((os.getenv('GOOGLE_REDIRECT_URI') or '').strip())
 GOOGLE_REDIRECT_URI=(os.getenv('GOOGLE_REDIRECT_URI') or PUBLIC_SITE_URL+'/api/auth/google/callback/').strip()
 REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES']=['shop.security.SafeSessionAuthentication']
 REST_FRAMEWORK['EXCEPTION_HANDLER']='shop.security.exception_handler'

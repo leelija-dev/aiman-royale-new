@@ -605,25 +605,39 @@ def safe_next(value):
     if not v.startswith('/') or v.startswith('//') or re.match(r'^/(login|register)(/|$|\?)',v):return '/account'
     return v[:500]
 
+def google_redirect_uri(request):
+    """The address Google sends the customer back to. It must match one of the
+    "Authorized redirect URIs" of the OAuth client in Google Cloud exactly.
+    Order: GOOGLE_REDIRECT_URI (if set) → NEXT_PUBLIC_SITE_URL → the address of this request.
+    Public sites always use https."""
+    uri=settings.GOOGLE_REDIRECT_URI if settings.GOOGLE_REDIRECT_URI_SET else ''
+    if not uri:
+        site=settings.PUBLIC_SITE_URL
+        uri=(site if site and not re.search(r'//(localhost|127\.0\.0\.1)(:|/|$)',site) else request.build_absolute_uri('/').rstrip('/'))+'/api/auth/google/callback/'
+    if uri.startswith('http://') and not re.search(r'//(localhost|127\.0\.0\.1)(:|/|$)',uri):uri='https://'+uri[7:]
+    return uri
+
 def google_start(request):
     from urllib.parse import urlencode
     from django.http import HttpResponseRedirect
     if not (settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET):return HttpResponseRedirect('/login?error=google-unavailable')
     state=secrets.token_urlsafe(24)
-    request.session['google_state']=state;request.session['google_next']=safe_next(request.GET.get('next'))
-    q={'client_id':settings.GOOGLE_CLIENT_ID,'redirect_uri':settings.GOOGLE_REDIRECT_URI,'response_type':'code','scope':'openid email profile','state':state,'prompt':'select_account'}
+    redirect=google_redirect_uri(request)
+    request.session['google_state']=state;request.session['google_next']=safe_next(request.GET.get('next'));request.session['google_redirect']=redirect
+    q={'client_id':settings.GOOGLE_CLIENT_ID,'redirect_uri':redirect,'response_type':'code','scope':'openid email profile','state':state,'prompt':'select_account'}
     return HttpResponseRedirect('https://accounts.google.com/o/oauth2/v2/auth?'+urlencode(q))
 
 def google_callback(request):
     import requests as http
     from django.http import HttpResponseRedirect
     expected=request.session.pop('google_state',None);nxt=request.session.pop('google_next','/account')
+    redirect=request.session.pop('google_redirect',None) or google_redirect_uri(request)
     fail=lambda code:HttpResponseRedirect(f'/login?error={code}&next={nxt}')
     if request.GET.get('error'):return fail('google-cancelled')
     if not expected or not hmac.compare_digest(expected,str(request.GET.get('state',''))):return fail('google-expired')
     try:
         tok=http.post('https://oauth2.googleapis.com/token',data={'code':request.GET.get('code',''),'client_id':settings.GOOGLE_CLIENT_ID,'client_secret':settings.GOOGLE_CLIENT_SECRET,
-                      'redirect_uri':settings.GOOGLE_REDIRECT_URI,'grant_type':'authorization_code'},timeout=15)
+                      'redirect_uri':redirect,'grant_type':'authorization_code'},timeout=15)
         tok.raise_for_status()
         info=http.get('https://openidconnect.googleapis.com/v1/userinfo',headers={'Authorization':'Bearer '+tok.json()['access_token']},timeout=15)
         info.raise_for_status();info=info.json()
