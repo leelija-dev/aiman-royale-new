@@ -173,12 +173,50 @@ class Product(models.Model):
     class Meta:ordering=['-featured','-created_at'];indexes=[models.Index(fields=['active','price'])]
     def __str__(self):return self.name
 
+MAX_IMAGE_MB=10
+
+
+def validate_image_size(f):
+    """Photos up to 10 MB are accepted."""
+    from django.core.exceptions import ValidationError as VE
+    if f and getattr(f,'size',0)>MAX_IMAGE_MB*1024*1024:
+        raise VE(f'This photo is {f.size/1024/1024:.1f} MB. Please upload a photo up to {MAX_IMAGE_MB} MB.')
+
+
+def shrink_upload(field_file,max_side=2400):
+    """Resize a freshly uploaded photo so its longest side is at most 2400 px (keeps the format).
+    A 10 MB camera photo becomes a few hundred KB, so product pages stay fast."""
+    from io import BytesIO
+    from PIL import Image, ImageOps
+    from django.core.files.base import ContentFile
+    f=getattr(field_file,'file',None)
+    if f is None or getattr(field_file,'_committed',True):return
+    try:
+        f.seek(0);im=Image.open(f);fmt=(im.format or 'JPEG').upper()
+        if fmt not in ('JPEG','PNG','WEBP'):return
+        im=ImageOps.exif_transpose(im)
+        if max(im.size)<=max_side and getattr(f,'size',0)<=2*1024*1024:
+            f.seek(0);return
+        im.thumbnail((max_side,max_side),Image.LANCZOS)
+        out=BytesIO()
+        if fmt=='JPEG':im.convert('RGB').save(out,'JPEG',quality=88,optimize=True,progressive=True)
+        elif fmt=='WEBP':im.save(out,'WEBP',quality=88,method=5)
+        else:im.save(out,'PNG',optimize=True)
+        field_file.save(field_file.name.rsplit('/',1)[-1],ContentFile(out.getvalue()),save=False)
+    except Exception:
+        try:f.seek(0)
+        except Exception:pass
+
+
 class ProductImage(models.Model):
     product=models.ForeignKey(Product,on_delete=models.CASCADE,related_name='images')
-    image=models.ImageField(upload_to='products/')
+    image=models.ImageField(upload_to='products/',validators=[validate_image_size],help_text='JPG, PNG or WebP up to 10 MB. Large photos are resized automatically to 2400 px.')
     alt=models.CharField(max_length=220)
     position=models.PositiveIntegerField(default=0)
     class Meta:ordering=['position','id']
+    def save(self,*a,**k):
+        shrink_upload(self.image)
+        super().save(*a,**k)
 
 class Variant(models.Model):
     product=models.ForeignKey(Product,on_delete=models.CASCADE,related_name='variants')

@@ -101,7 +101,7 @@ for sub.aimanroyale.com, allow larger photos — nginx refuses uploads over 1 MB
 ```nginx
 server {
     server_name sub.aimanroyale.com;
-    client_max_body_size 20m;
+    client_max_body_size 100m;
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
@@ -123,7 +123,7 @@ let nginx serve them directly and raise the upload size:
 ```nginx
 server {
     server_name sub.aimanroyale.com;
-    client_max_body_size 20m;                      # banner / product photos
+    client_max_body_size 100m;                      # banner / product photos
     location /media/  { alias /path/to/aiman-royale-new/backend/media/; expires 7d; access_log off; }
     location /static/ { alias /path/to/aiman-royale-new/backend/staticfiles/; expires 1y; }
     location / {
