@@ -211,10 +211,11 @@ def shrink_upload(field_file,max_side=2400):
 class ProductImage(models.Model):
     product=models.ForeignKey(Product,on_delete=models.CASCADE,related_name='images')
     image=models.ImageField(upload_to='products/',validators=[validate_image_size],help_text='JPG, PNG or WebP up to 10 MB. Large photos are resized automatically to 2400 px.')
-    alt=models.CharField(max_length=220)
+    alt=models.CharField('Alt text',max_length=220,blank=True,help_text='Optional – the product name is used when empty.')
     position=models.PositiveIntegerField(default=0)
     class Meta:ordering=['position','id']
     def save(self,*a,**k):
+        if not self.alt and self.product_id:self.alt=self.product.name[:220]
         shrink_upload(self.image)
         super().save(*a,**k)
 

@@ -759,3 +759,40 @@ class ProductImageUploadTests(TestCase):
         f=SimpleUploadedFile('huge.jpg',b'0'*(10*1024*1024+1),'image/jpeg')
         with self.assertRaisesMessage(ValidationError,'up to 10 MB'):
             ProductImage(product=p,alt='x',image=f).full_clean()
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'],STORAGES={'default':{'BACKEND':'django.core.files.storage.FileSystemStorage'},'staticfiles':{'BACKEND':'django.contrib.staticfiles.storage.StaticFilesStorage'}})
+class AdminManyPhotosTests(TestCase):
+    def test_admin_saves_more_than_three_photos(self):
+        import tempfile
+        from io import BytesIO
+        from PIL import Image
+        from django.contrib.auth import get_user_model
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import Client
+        from shop.models import ProductImage
+        def jpg(n):
+            b=BytesIO();Image.new('RGB',(60,80),(n*20,0,0)).save(b,'JPEG');return SimpleUploadedFile(f'p{n}.jpg',b.getvalue(),'image/jpeg')
+        U=get_user_model();U.objects.create_superuser(username='boss2@example.com',email='boss2@example.com',password='Test-Password-910!')
+        c=Client();self.assertTrue(c.login(username='boss2@example.com',password='Test-Password-910!'))
+        c.cookies['admin_sessionid']=c.cookies['sessionid'].value
+        from shop.models import Collection
+        col=Collection.objects.create(name='Suits',slug='suits-many')
+        p=Product.objects.create(name='Many',slug='many',price='100',mrp='100')
+        url=f'/admin/shop/product/{p.id}/change/'
+        page=c.get(url);self.assertContains(page,'Add several photos at once');self.assertContains(page,'shrink-uploads.js')
+        form={'name':'Many','slug':'many','price':'100','mrp':'100','active':'on','description':'d','fabric':'','fit':'','care':'','includes':'','collections':[str(col.id)]}
+        for k,v in page.context['adminform'].form.initial.items():
+            if k not in form and v not in (None,'') and not isinstance(v,(list,tuple)) and not hasattr(v,'pk'):form[k]=v
+        for fs in page.context['inline_admin_formsets']:
+            pre=fs.formset.prefix
+            n=6 if fs.formset.model is ProductImage else 0
+            form.update({f'{pre}-TOTAL_FORMS':str(n),f'{pre}-INITIAL_FORMS':'0',f'{pre}-MIN_NUM_FORMS':'0',f'{pre}-MAX_NUM_FORMS':'1000'})
+            for i in range(n):form.update({f'{pre}-{i}-image':jpg(i),f'{pre}-{i}-alt':'' ,f'{pre}-{i}-position':str(i)})
+        form['bulk_photos']=[jpg(7),jpg(8),jpg(9),jpg(10)]
+        with self.settings(MEDIA_ROOT=tempfile.mkdtemp()):
+            r=c.post(url,form)
+        errs=r.context['adminform'].form.errors if r.status_code==200 else None
+        self.assertEqual(r.status_code,302,errs or [f.errors for fs in (r.context or {}).get('inline_admin_formsets',[]) for f in [fs.formset]])
+        self.assertEqual(p.images.count(),10)
+        self.assertTrue(all(i.alt=='Many' for i in p.images.all()))
