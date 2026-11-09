@@ -181,11 +181,11 @@ def home(request):
     for sec in HomeSection.objects.filter(active=True).prefetch_related('cards'):
         out.append({'id':sec.id,'kind':sec.kind,'eyebrow':sec.eyebrow,'title':sec.title,'subtitle':sec.subtitle,'text':sec.text,
                     'button':{'label':sec.button_label,'href':sec.button_url} if sec.button_label else None,'image':img(sec),
-                    'href':sec.button_url,'mobile_image':media_url(sec.mobile_image),'alt':sec.alt_text,'image_title':sec.image_title,
+                    'href':sec.button_url,'mobile_image':media_url(sec.mobile_image) or sec.mobile_image_path,'alt':sec.alt_text,'image_title':sec.image_title,
                     'product_filter':sec.product_filter,'product_count':sec.product_count,
                     'cards':[{'label':c.label,'title':c.title,'text':c.text,'bullets':[b.strip() for b in c.bullets.splitlines() if b.strip()],
                               'caption':c.caption,'href':c.url,'button':c.button_label,'icon':c.icon,'image':img(c),
-                              'mobile_image':media_url(c.mobile_image),'alt':c.alt_text,'image_title':c.image_title} for c in sec.cards.all() if c.active]})
+                              'mobile_image':media_url(c.mobile_image) or c.mobile_image_path,'alt':c.alt_text,'image_title':c.image_title} for c in sec.cards.all() if c.active]})
         if sec.kind=='occasions':
             # Always the live occasions (Haldi, Wedding, Party, Festive…) from admin → Occasions, in their order.
             used=set()

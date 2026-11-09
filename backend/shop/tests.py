@@ -723,10 +723,10 @@ class HomeOccasionsSeoTests(TestCase):
         for i,n in enumerate(['Haldi','Wedding']):Occasion.objects.create(name=n,slug=n.lower(),sort_order=i)
         Occasion.objects.create(name='Old',slug='old',active=False)
         HomeSection.objects.create(kind='occasions',admin_name='Occ',title='Elegance at Every Wear')
-        hero=HomeSection.objects.create(kind='hero',admin_name='Hero',image_path='/images/hero.webp',button_url='/collections/gown',alt_text='Red gown banner',image_title='Gowns')
+        hero=HomeSection.objects.create(kind='hero',admin_name='Hero',image_path='/images/hero.webp',mobile_image_path='/images/hero-m.webp',button_url='/collections/gown',alt_text='Red gown banner',image_title='Gowns')
         HomeCard.objects.create(section=hero,image_path='/images/b.webp',url='/products?sale=1',alt_text='Sale banner',image_title='Sale')
         d=APIClient().get('/api/home/').data['sections']
         occ=next(s for s in d if s['kind']=='occasions');h=next(s for s in d if s['kind']=='hero')
         self.assertEqual([(c['title'],c['href']) for c in occ['cards']],[('Haldi','/products?occasion=haldi'),('Wedding','/products?occasion=wedding')])
-        self.assertEqual((h['href'],h['alt'],h['image_title']),('/collections/gown','Red gown banner','Gowns'))
+        self.assertEqual((h['href'],h['alt'],h['image_title'],h['mobile_image']),('/collections/gown','Red gown banner','Gowns','/images/hero-m.webp'))
         self.assertEqual((h['cards'][0]['href'],h['cards'][0]['alt'],h['cards'][0]['image_title']),('/products?sale=1','Sale banner','Sale'))

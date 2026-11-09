@@ -2109,3 +2109,6 @@ body:has(.az-bar.show) .whatsapp-float{bottom:84px}
 .royale-home .lh-duo h3{color:#000;-webkit-text-fill-color:#000}
 .royale-home .lh-duo a div h3{color:#000;-webkit-text-fill-color:#000}
 .royale-home .hero-slide .hero-copy :is(h1,h2,.hero-h){color:#000;-webkit-text-fill-color:#000;background:none}
+/* Hero banners: desktop pictures are 1920×720 (8:3), phone pictures 1080×1350 (4:5) */
+@media(min-width:701px){.lh-hero-wrap .luxury-hero.hero-slider{height:auto;min-height:0;aspect-ratio:8/3;max-height:none}}
+.lh-hero-wrap .hero-slide img{object-position:center}
