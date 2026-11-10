@@ -1,12 +1,13 @@
 import {Fragment} from 'react';
 import Image from 'next/image';
+import {JsonLd} from '@/components/json-ld';
 import Link from 'next/link';
 import {ArrowRight, PackageCheck, Headphones, Gem, ShieldCheck, Truck, Award, Heart, Star, Sparkles, CalendarDays, Ruler, Check, Plus, ShoppingBag, Video, UserRound} from 'lucide-react';
 import {get} from '@/lib/server';
-import {ProductPage} from '@/lib/types';
+import {ProductPage, type Site} from '@/lib/types';
 import {Card} from '@/components/collection-page';
 import {CategoryDetails} from '@/components/category-details';
-import {PromoCarousel, Scroller, HomeSizeGuide, NotesCarousel, HeroSlider, type SizeGuideData} from '@/components/home-extras';
+import {Scroller, HomeSizeGuide, NotesCarousel, HeroSlider, type SizeGuideData} from '@/components/home-extras';
 
 export const metadata = {alternates: {canonical: '/'}};
 
@@ -50,8 +51,8 @@ function render(s: Section, products: Record<number, ProductPage>, sizeGuide: Si
     case 'featured': // circular "Most Loved" row — shown on phones, like the live site
       return <Wrap cls="lh-mobile-only lh-loved-wrap"><section className="lh-loved" aria-label={s.title || 'Most loved'}>{c.map(x =>
         <Link key={x.title + x.href} href={x.href || '/products'}><span><Image src={x.image || IMG} alt="" fill sizes="96px"/></span><strong>{x.title}</strong>{x.caption && <small>{x.caption}</small>}</Link>)}</section></Wrap>;
-    case 'carousel': // promo banners — shown on phones, like the live site
-      return c.length ? <Wrap cls="lh-mobile-only"><PromoCarousel slides={c.map(x => ({title: x.title, image: x.image || IMG, href: x.href || '/products', caption: x.caption}))}/></Wrap> : null;
+    case 'carousel': // old phone-only promo slider: not shown, phones use the main hero slider only
+      return null;
     case 'collections':
       return <Wrap><section className="lh-sec"><Head s={s} cls="center pink"/>
         <Scroller label={s.title}><div className="lh-show">{c.map(x => <Link key={x.title + x.href} href={x.href || '/products'} className="lh-show-card">
@@ -123,5 +124,6 @@ export default async function Home() {
   const pages = await Promise.all(rows.map(s => get<ProductPage>(`products/?${s.product_filter}`).catch(() => null)));
   const products: Record<number, ProductPage> = {};
   rows.forEach((s, i) => { if (pages[i]) products[s.id] = pages[i]!; });
-  return <div className="royale-home">{sections.map(s => <Fragment key={s.id}>{render(s, products, sizeGuide)}</Fragment>)}</div>;
+  const site = await get<Site>('site/').catch(() => null);
+  return <div className="royale-home"><JsonLd items={site?.schema}/>{sections.map(s => <Fragment key={s.id}>{render(s, products, sizeGuide)}</Fragment>)}</div>;
 }

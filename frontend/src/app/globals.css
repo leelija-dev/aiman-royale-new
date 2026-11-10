@@ -2159,3 +2159,20 @@ body:has(.az-bar.show) .whatsapp-float{bottom:84px}
  .co-pay{width:100%;white-space:normal}
  .co-card .co-step,.co-card [class*=edit]{flex-shrink:0}
 }
+
+/* ===== Product photos are 2:3 (e.g. 1000×1500): show the whole outfit, no cropping ===== */
+.cp-photo,.lh-products .cp-photo,.az-recent-card>span,.az-paired-card>span,.wl-img,.bag-card-img,.hk-prod>span,.co-item-img,.az-shot,.az-shots .az-shot{aspect-ratio:2/3!important}
+.cp-photo img,.az-recent-card img,.az-paired-card img,.wl-img img,.bag-card-img img,.hk-prod img,.az-shot img{object-fit:cover;object-position:center top}
+.az-shots.odd>.az-shot:last-child:not(:first-child){grid-column:auto;aspect-ratio:2/3}
+.pd-main,.pd-thumbs img{aspect-ratio:2/3}
+/* breadcrumb right under the navigation */
+.az-crumbs{max-width:1500px;margin:0 auto;padding:14px 4% 0;font-size:12.5px;color:#555}
+.az-crumbs+.az-pd{padding-top:12px}
+@media(max-width:860px){.az-crumbs{padding:10px 5% 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+/* product tags: icon + clear contrast */
+.tag-pill,.cp-tags span.tag-pill,.az-pills span.tag-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;letter-spacing:.3px;line-height:1;padding:5px 10px;border-radius:999px;border:1px solid transparent}
+.tag-custom{background:#a10000!important;color:#fff!important}
+.tag-ready{background:#000!important;color:#fff!important}
+.tag-best,.tag-off,.tag-other{background:#fff5f8!important;color:#a10000!important;border-color:#f0b9c9!important}
+.tag-pill svg{flex-shrink:0}
+.az-pills .tag-pill{font-size:12px;padding:6px 12px}

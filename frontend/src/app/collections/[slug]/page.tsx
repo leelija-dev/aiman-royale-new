@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import {JsonLd} from '@/components/json-ld';
 import {notFound} from 'next/navigation';
 import {ArrowRight, ArrowUpRight, CalendarDays, UserRound, Ruler, HelpCircle, Shirt} from 'lucide-react';
 import {get} from '@/lib/server';
@@ -68,7 +69,8 @@ export default async function CollectionPage({params, searchParams}: Props) {
   const faqLd = {'@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: qa.map(x => ({'@type': 'Question', name: x.question, acceptedAnswer: {'@type': 'Answer', text: x.answer}}))};
 
   return <div className="cp">
-    {qa.length > 0 && <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify(faqLd)}}/>}
+    {qa.length > 0 && <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify(faqLd).replace(/</g, '\\u003c')}}/>}
+    <JsonLd items={c.schema}/>
 
     {bandCards.length > 0 && <section className="az-band" aria-label={`Shop ${c.name}`}><BandCarousel cards={bandCards}/></section>}
 

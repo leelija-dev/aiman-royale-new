@@ -6,14 +6,23 @@ class ImageSerializer(serializers.ModelSerializer):
     def get_url(self,obj):return obj.image.url if obj.image else ''
 class VariantSerializer(serializers.ModelSerializer):
     class Meta:model=Variant;fields=['id','sku','size','colour','stock']
+def safe_schema(text):
+    try:return parse_schema(text)
+    except Exception:return []
+
+
 class CollectionSerializer(serializers.ModelSerializer):
-    class Meta:model=Collection;fields=['id','name','slug','description','image','seo_title','seo_description']
+    schema=serializers.SerializerMethodField()
+    def get_schema(self,o):return safe_schema(o.schema_json)
+    class Meta:model=Collection;fields=['id','name','slug','description','image','seo_title','seo_description','schema']
 class ProductSerializer(serializers.ModelSerializer):
+    schema=serializers.SerializerMethodField()
+    def get_schema(self,o):return safe_schema(o.schema_json)
     occasions=serializers.SlugRelatedField(slug_field='name',many=True,read_only=True)
     images=ImageSerializer(many=True,read_only=True)
     variants=VariantSerializer(many=True,read_only=True)
     collections=CollectionSerializer(many=True,read_only=True)
-    class Meta:model=Product;fields=['id','name','slug','description','care','fabric','fit','includes','occasions','price','mrp','featured','custom_fit','images','variants','collections','seo_title','seo_description','updated_at']
+    class Meta:model=Product;fields=['id','name','slug','description','care','fabric','fit','includes','occasions','price','mrp','featured','custom_fit','images','variants','collections','seo_title','seo_description','schema','updated_at']
 class AddressSerializer(serializers.Serializer):
     name=serializers.CharField(max_length=100)
     phone=serializers.RegexField(r'^\+?[1-9]\d{9,14}$')

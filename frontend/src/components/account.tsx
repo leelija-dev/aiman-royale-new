@@ -41,6 +41,12 @@ function OrderCard({o: initial}: {o: FullOrder}) {
     try { const d = await api<FullOrder>(`orders/${o.id}/return/`, 'POST', {reason: rReason}); setO({...o, ...d}); setReturning(false); setMsg('Return requested. We’ll confirm and arrange a Delhivery pickup from your address.'); }
     catch (e) { setMsg(err(e)); } finally { setBusy(false); }
   }
+  async function dropUnpaid() {
+    setBusy(true); setMsg('');
+    try { const d = await api<{order: FullOrder}>('payments/cancel/', 'POST', {order: o.id}); setO({...o, ...d.order}); bagChanged();
+      setMsg(d.order.status === 'cancelled' ? 'Order cancelled — nothing was charged. The items are back in your bag.' : d.order.status === 'pending' ? 'We could not confirm the payment status right now. Please try again in a minute.' : 'Your payment was received — this order is confirmed.'); }
+    catch (e) { setMsg(err(e)); } finally { setBusy(false); }
+  }
   async function cancel() {
     setBusy(true); setMsg('');
     try { const d = await api<FullOrder>(`orders/${o.id}/cancel/`, 'POST', {reason}); setO({...o, ...d}); setAsking(false);
@@ -57,7 +63,7 @@ function OrderCard({o: initial}: {o: FullOrder}) {
         <strong>{money(Number(i.unit_price) * i.quantity)}</strong></div>)}</div>
       <div className="ac-ship"><h4><MapPin size={16}/> Delivery address</h4>
         <p><strong>{a.name}</strong><br/>{a.line1}{a.line2 ? `, ${a.line2}` : ''}<br/>{a.city}, {a.state} {a.pincode}<br/>{a.phone}</p>
-        <h4><CreditCard size={16}/> Payment</h4><p>{o.payment_method === 'cod' ? 'Cash on Delivery' : 'Paid online (Cashfree)'}{o.pay_with ? ` · ${o.pay_with.toUpperCase()}` : ''}</p>
+        <h4><CreditCard size={16}/> Payment</h4><p>{o.payment_method === 'cod' ? 'Cash on Delivery' : ['pending', 'expired', 'cancelled'].includes(o.status) ? 'Online (Cashfree) – not paid' : 'Paid online (Cashfree)'}{o.pay_with ? ` · ${o.pay_with.toUpperCase()}` : ''}</p>
         {o.note && <><h4>Note</h4><p>“{o.note}”</p></>}
         {['paid', 'cod', 'processing', 'shipped', 'delivered'].includes(o.status) && <div className="ac-awb">
           <span className="ac-awb-ico"><Truck size={18}/></span>
@@ -72,7 +78,8 @@ function OrderCard({o: initial}: {o: FullOrder}) {
         {o.can_return && !returning && <button type="button" className="pd-btn-sm ac-return-btn" onClick={() => setReturning(true)}><RotateCcw size={15}/> Return order</button>}
         {o.can_cancel && !asking && <button type="button" className="pd-btn-sm ac-cancel-btn" onClick={() => setAsking(true)}><XCircle size={15}/> Cancel order</button>}
       </div>
-      {o.status === 'pending' && <Link className="pd-btn-sm" href={`/payment/return?order=${o.id}`}>Check payment status</Link>}</footer>
+      {o.status === 'pending' && <div className="ac-actions"><Link className="pd-btn-sm" href={`/payment/return?order=${o.id}`}>Check payment status</Link>
+        {o.payment_method !== 'cod' && <button type="button" className="pd-btn-sm ac-cancel-btn" disabled={busy} onClick={dropUnpaid}><XCircle size={15}/> Cancel &amp; return items to bag</button>}</div>}</footer>
     {returning && <div className="ac-cancel-box ac-return-box" role="group" aria-label="Return this order">
       <p><strong>Return order #{ref}?</strong> We’ll book a Delhivery pickup from your delivery address once your request is approved. Please keep the outfit unused with its tags.</p>
       <select value={rReason} onChange={e => setRReason(e.target.value)} aria-label="Reason for return"><option value="">Choose a reason</option>
@@ -89,7 +96,7 @@ function OrderCard({o: initial}: {o: FullOrder}) {
       <div><button type="button" className="pd-btn-sm ac-cancel-btn" disabled={busy} onClick={cancel}>{busy ? 'Cancelling…' : 'Yes, cancel order'}</button>
         <button type="button" className="pd-btn-sm" onClick={() => setAsking(false)}>Keep order</button></div></div>}
     {msg && <p className="ac-hint" role="status">{msg}</p>}
-    {o.status === 'pending' && <p className="ac-hint">Payment is awaiting confirmation. Unpaid orders are released after 30 minutes. If you were charged, contact us with this order number before paying again.</p>}
+    {o.status === 'pending' && <p className="ac-hint">Payment not completed yet. Unpaid orders are cancelled after 30 minutes and the items go back to your bag — or cancel now to pay with another method. If you were charged, contact us with this order number before paying again.</p>}
     {o.cancelled_at && <p className="ac-hint">Cancelled on {fmtDate(o.cancelled_at, true)}{o.cancel_reason ? ` · ${o.cancel_reason}` : ''}.{o.status === 'refund_required' ? ' Our team will process your refund shortly.' : o.status === 'refunded' ? ' Refund started to your original payment method.' : ''}</p>}
     {o.status === 'refund_required' && !o.cancelled_at && <p className="ac-hint">Your payment arrived after the reservation closed. Our team will reconcile it — please contact us with this order number.</p>}
   </article>;

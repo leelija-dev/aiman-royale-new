@@ -65,7 +65,7 @@ class PageQuestionInline(admin.TabularInline):
 class CollectionAdmin(admin.ModelAdmin):
     prepopulated_fields={'slug':('name',)};list_display=['name','parent','sort_order','active'];list_editable=['parent','sort_order','active'];list_filter=['parent'];inlines=[PageQuestionInline]
     fieldsets=((None,{'fields':('name','slug','parent','sort_order','description','image','active')}),
-               ('SEO',{'fields':('seo_title','seo_description')}),
+               ('SEO',{'fields':('seo_title','seo_description','schema_json')}),
                ('Category page text (leave blank to use the defaults in Site settings; {name} = collection name)',{'fields':('hero_eyebrow','hero_tagline','seo_heading','seo_body')}),
                ('Category details (bottom of page, with Read more)',{'fields':('details',)}))
 @admin.register(PageQuestion)
@@ -208,6 +208,7 @@ class AppointmentAdmin(admin.ModelAdmin):
 @admin.register(SiteSettings)
 class SettingsAdmin(admin.ModelAdmin):
     fieldsets=((None,{'fields':('name','announcement','hero_title','hero_description','hero_image')}),
+               ('Homepage schema (SEO)',{'fields':('schema_json',),'description':'Custom JSON-LD added to the homepage, e.g. Organization, WebSite, LocalBusiness.'}),
                ('Contact',{'fields':('phone','email','address','gstin','delivery_message')}),
                ('Size guide popup',{'fields':('size_guide_note','size_chart_pdf')}),
                ('Appointments (Calendly)',{'fields':('calendly_url','calendly_primary_color','calendly_text_color','calendly_background_color')}),

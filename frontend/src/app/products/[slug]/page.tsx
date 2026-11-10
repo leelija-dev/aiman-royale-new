@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import {notFound} from 'next/navigation';
+import {JsonLd} from '@/components/json-ld';
 import {get, origin} from '@/lib/server';
 import {Facets, Product, ProductPage, Site, money, photo} from '@/lib/types';
 import {ProductDetails} from '@/components/product-details';
@@ -44,6 +45,7 @@ export default async function Detail({params}: Props) {
       availability: p.variants.some(v => v.stock > 0) ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock', itemCondition: 'https://schema.org/NewCondition'}};
 
   return <div className="cp pd-page">
+    <JsonLd items={p.schema}/>
     <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify(json).replace(/</g, '\\u003c')}}/>
     {faqs.length > 0 && <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify({'@context': 'https://schema.org', '@type': 'FAQPage',
       mainEntity: faqs.map(f => ({'@type': 'Question', name: f.q, acceptedAnswer: {'@type': 'Answer', text: f.a}}))}).replace(/</g, '\\u003c')}}/>}

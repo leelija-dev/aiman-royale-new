@@ -833,3 +833,79 @@ class GoogleResetPasswordRuleTests(TestCase):
         u=Customer(username='ravi@example.com',email='ravi@example.com',first_name='Ravi')
         for ok in ['password12','ravi@example.com','1234567890']:validate_password(ok,u)
         with self.assertRaises(ValidationError):validate_password('short1',u)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'],EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class AbandonedPaymentTests(TestCase):
+    def setUp(self):
+        cache.clear();self.u=Customer.objects.create_user(username='ab@example.com',email='ab@example.com',password='Test-Password-910!')
+        self.p=Product.objects.create(name='Suit',slug='suit-ab',price='2000',mrp='3000')
+        self.v=Variant.objects.create(product=self.p,sku='AB-M',size='M',colour='Pink',stock=3)
+        self.cart=Cart.objects.create(user=self.u);CartItem.objects.create(cart=self.cart,variant=self.v,quantity=2)
+        self.c=APIClient();self.c.force_login(self.u)
+        self.address={'name':'A B','phone':'+919000000001','email':'ab@example.com','line1':'Road','city':'Kolkata','state':'West Bengal','pincode':'700001','country':'IN'}
+    def order(self):
+        o=reserve_order(self.u,self.cart,self.address,uuid.uuid4())[0]
+        Order.objects.filter(pk=o.pk).update(gateway_order_id='ar_'+o.id.hex,payment_session_id='sess_upi',pay_with='upi');o.refresh_from_db();return o
+
+    @patch('shop.services.gateway')
+    def test_closing_window_cancels_and_returns_items_to_bag(self,gw):
+        o=self.order();self.v.refresh_from_db();self.assertEqual(self.v.stock,1);self.assertEqual(self.cart.items.count(),0)
+        gw.side_effect=lambda m,path,payload=None,idempotency_key=None:{'order_status':'ACTIVE'} if m=='GET' else {'order_status':'TERMINATED'}
+        r=self.c.post('/api/payments/cancel/',{'order':str(o.id)},format='json')
+        self.assertEqual(r.status_code,200);self.assertEqual(r.data['order']['status'],'cancelled')
+        self.v.refresh_from_db();self.assertEqual(self.v.stock,3)
+        self.assertEqual(list(self.cart.items.values_list('variant_id','quantity')),[(self.v.id,2)]);self.assertEqual(r.data['items'],list(self.cart.items.values_list('id',flat=True)))
+        self.assertIn(('PATCH','orders/'+o.gateway_order_id),[(c.args[0],c.args[1]) for c in gw.call_args_list])
+
+    @patch('shop.services.gateway')
+    def test_retry_with_another_method_gets_a_new_session(self,gw):
+        o=self.order()
+        gw.side_effect=lambda m,path,payload=None,idempotency_key=None:{'order_status':'ACTIVE'} if m=='GET' else {}
+        self.c.post('/api/payments/cancel/',{'order':str(o.id)},format='json')
+        sent={}
+        def fake(m,path,payload=None,idempotency_key=None):
+            sent.update(payload or {});return {'order_id':payload['order_id'],'payment_session_id':'sess_card'}
+        gw.side_effect=fake
+        with self.settings(CASHFREE_APP_ID='x',CASHFREE_SECRET_KEY='y'):
+            r=self.c.post('/api/checkout/',{'address':self.address,'key':str(uuid.uuid4()),'method':'cashfree','pay_with':'card','consent':True},format='json')
+        self.assertEqual(r.status_code,200,r.data);self.assertEqual(r.data['payment_session_id'],'sess_card')
+        self.assertEqual(sent['order_meta']['payment_methods'],'cc,dc');self.assertNotEqual(r.data['order']['id'],str(o.id))
+
+    @patch('shop.services.gateway')
+    def test_paid_order_is_not_cancelled(self,gw):
+        o=self.order()
+        def fake(m,path,payload=None,idempotency_key=None):
+            if path.endswith('/payments'):return [{'payment_status':'SUCCESS','payment_amount':str(o.total),'order_id':o.gateway_order_id,'payment_currency':'INR','cf_payment_id':77}]
+            return {'order_status':'PAID','order_id':o.gateway_order_id,'order_currency':'INR','order_amount':str(o.total)}
+        gw.side_effect=fake
+        r=self.c.post('/api/payments/cancel/',{'order':str(o.id)},format='json')
+        self.assertEqual(r.data['order']['status'],'paid');self.assertEqual(self.cart.items.count(),0)
+
+    @patch('shop.services.gateway')
+    def test_unreachable_gateway_keeps_order_pending(self,gw):
+        o=self.order();gw.side_effect=ProviderUnavailable('down')
+        r=self.c.post('/api/payments/cancel/',{'order':str(o.id)},format='json')
+        self.assertEqual(r.status_code,503);o.refresh_from_db();self.assertEqual(o.status,'pending')
+
+    def test_expired_order_items_go_back_to_bag(self):
+        from shop.tasks import expire_orders
+        o=self.order();Order.objects.filter(pk=o.pk).update(expires_at=timezone.now()-timedelta(minutes=1))
+        expire_orders();o.refresh_from_db();self.assertEqual(o.status,'expired');self.assertEqual(self.cart.items.get().quantity,2)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'])
+class CustomSchemaTests(TestCase):
+    def test_schema_validation_and_output(self):
+        from django.core.exceptions import ValidationError as VE
+        from shop.models import validate_schema,Page
+        validate_schema('{"@context":"https://schema.org","@type":"Organization","name":"Aiman Royale"}')
+        validate_schema('<script type="application/ld+json">{"@type":"WebSite"}</script>\n<script type="application/ld+json">[{"@type":"Brand"}]</script>')
+        with self.assertRaises(VE):validate_schema('{"@type": oops}')
+        cache.clear()
+        p=Product.objects.create(name='S',slug='s-schema',price='10',mrp='10',schema_json='{"@type":"Product","brand":"AR"}')
+        self.assertEqual(APIClient().get('/api/products/s-schema/').data['schema'],[{'@type':'Product','brand':'AR'}])
+        Page.objects.create(slug='faq-x',title='FAQ',body='x',published=True,schema_json='<script>{"@type":"FAQPage"}</script>')
+        self.assertEqual(APIClient().get('/api/pages/faq-x/').data['schema'],[{'@type':'FAQPage'}])
+        s=SiteSettings.current();s.schema_json='{"@type":"Organization"}';s.save();cache.clear()
+        self.assertEqual(APIClient().get('/api/site/').data['schema'],[{'@type':'Organization'}])
