@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import {notFound} from 'next/navigation';
+import {JsonLd} from '@/components/json-ld';
 import {get} from '@/lib/server';
 
-type P = {title: string; body: string; html: string; updated: string | null};
+type P = {title: string; body: string; html: string; updated: string | null; schema?: unknown[]};
 
 export async function generateMetadata({params}: {params: Promise<{slug: string}>}) {
   const {slug} = await params;
@@ -19,6 +20,7 @@ export default async function Page({params}: {params: Promise<{slug: string}>}) 
   try { p = await get<P>(`pages/${slug}/`); }
   catch (e) { if (e instanceof Error && e.message === 'Not found') notFound(); throw e; }
   return <div className="info-page policy">
+    <JsonLd items={p.schema}/>
     <div className="info-head"><p className="eyebrow">Aiman Royale · Here to help</p><h1>{p.title}</h1>
       {p.updated && <p className="policy-updated">Last updated {new Date(p.updated).toLocaleDateString('en-IN', {day: 'numeric', month: 'long', year: 'numeric'})}</p>}</div>
     <div className="policy-grid">

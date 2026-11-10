@@ -5,6 +5,7 @@ import {useEffect, useRef, useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {Heart, ShoppingBag, ArrowRight, Check, X, ZoomIn, Ruler, TicketPercent, ChevronDown, ChevronLeft, ChevronRight, Star, PencilLine, CircleAlert, Link2, Share2, Truck, Phone, Mail} from 'lucide-react';
 import {rememberViewed} from '@/components/product-extras';
+import {TagPill} from '@/components/collection-page';
 import {Bag, Product, money, photo, discount} from '@/lib/types';
 import {api, bagChanged, err} from '@/lib/client';
 import type {PinInfo} from '@/lib/types';
@@ -184,15 +185,15 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
     : <button type="button" className={`pd-btn pd-btn-bag ${cls}`} disabled={!!busy} onClick={onAdd}>{busy === 'bag' ? 'Adding…' : 'Add To Cart'}</button>;
 
   return <>
+    {crumbs.length > 0 && <nav className="az-crumbs" aria-label="Breadcrumb">{crumbs.map((c, i) => <span key={c.href + i}>{i > 0 && <i aria-hidden> / </i>}{i < crumbs.length - 1 ? <Link href={c.href}>{c.label}</Link> : <span aria-current="page">{c.label}</span>}</span>)}</nav>}
     <div className="az-pd">
       <div className="az-gal">
         <div className={`az-shots${images.length === 1 ? ' one' : images.length % 2 ? ' odd' : ''}`}>{images.map((im, i) => <button key={im.id + '-' + i} type="button" className="az-shot" aria-label={`Zoom photo ${i + 1}`} onClick={() => { setImage(i); setZoom(true); }}>
           <Image src={im.url} alt={im.alt || p.name} fill priority={i < 2} sizes="(max-width:800px) 88vw, 29vw" quality={88}/><span className="az-zoom" aria-hidden><ZoomIn size={18}/></span></button>)}</div>
-        {crumbs.length > 0 && <nav className="az-crumbs" aria-label="Breadcrumb">{crumbs.map((c, i) => <span key={c.href + i}>{i > 0 && <i aria-hidden> / </i>}{i < crumbs.length - 1 ? <Link href={c.href}>{c.label}</Link> : <span aria-current="page">{c.label}</span>}</span>)}</nav>}
       </div>
 
       <div className="az-panel">
-        {tags.length > 0 && <div className="az-pills">{tags.map(t => <span key={t}>{t}</span>)}</div>}
+        {tags.length > 0 && <div className="az-pills">{tags.map(t => <TagPill key={t} t={t}/>)}</div>}
         <Link href="/products" className="az-brand">Aiman Royale <ChevronRight size={18}/></Link>
         <h1 className="az-name">{p.name}</h1>
         <div className="az-price"><strong>{money(p.price)}</strong>{off > 0 && <><del>{money(p.mrp)}</del><em>({off}% OFF)</em></>}</div>

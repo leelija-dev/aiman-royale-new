@@ -3,7 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {useRef, useState} from 'react';
-import {Heart, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ArrowUpRight, ArrowLeft, ArrowRight} from 'lucide-react';
+import {Heart, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ArrowUpRight, ArrowLeft, ArrowRight, Scissors, Truck, Star, Tag, Sparkles} from 'lucide-react';
 import {api} from '@/lib/client';
 import {useWishlist, loginHere} from '@/lib/wishlist';
 import {Product, ProductPage, Facets, money, photo, discount} from '@/lib/types';
@@ -66,6 +66,13 @@ function WishHeart({id, slug}: {id: number; slug: string}) {
   </button>;
 }
 
+/** Product tag with an icon: Custom-fit (red), Ready to Ship (black), others (pink). */
+export function TagPill({t}: {t: string}) {
+  const k = /custom/i.test(t) ? 'custom' : /ready/i.test(t) ? 'ready' : /best/i.test(t) ? 'best' : /off/i.test(t) ? 'off' : 'other';
+  const icon = k === 'custom' ? <Scissors size={12} aria-hidden/> : k === 'ready' ? <Truck size={12} aria-hidden/> : k === 'best' ? <Star size={12} aria-hidden/> : k === 'off' ? <Tag size={12} aria-hidden/> : <Sparkles size={12} aria-hidden/>;
+  return <span className={`tag-pill tag-${k}`}>{icon}{t}</span>;
+}
+
 export function Card({p}: {p: Product; hex?: Record<string, string>}) {
   const off = discount(p);
   const ready = p.variants.some(v => v.stock > 0);
@@ -79,7 +86,7 @@ export function Card({p}: {p: Product; hex?: Record<string, string>}) {
       <p className="cp-brand">Aiman Royale</p>
       <h3><Link href={`/products/${p.slug}`} title={p.name}>{p.name}</Link></h3>
       <p className="cp-price-line"><strong>{money(p.price)}</strong>{off > 0 && <><del>{money(p.mrp)}</del><em>{off}% OFF</em></>}</p>
-      {tags.length > 0 && <div className="cp-tags">{tags.slice(0, 2).map(t => <span key={t}>{t}</span>)}</div>}
+      {tags.length > 0 && <div className="cp-tags">{tags.slice(0, 2).map(t => <TagPill key={t} t={t}/>)}</div>}
     </div>
   </article>;
 }

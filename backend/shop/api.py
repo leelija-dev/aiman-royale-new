@@ -53,7 +53,7 @@ def merge_cart(request,old_key):
 @api_view(['GET'])
 def site(request):
     s=SiteSettings.current()
-    return Response({'name':s.name,'announcement':s.announcement,'hero_title':s.hero_title,'hero_description':s.hero_description,'hero_image':s.hero_image.url if s.hero_image else '/images/hero.webp','phone':s.phone,'email':s.email,'address':s.address,'cod_enabled':s.cod_enabled,'payment_ready':bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY),'google_ready':bool(settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET),'whatsapp_ready':bool(settings.WHATSAPP_TOKEN and settings.WHATSAPP_PHONE_ID and settings.WHATSAPP_OTP_TEMPLATE and settings.WHATSAPP_GRAPH_VERSION),'collections':CollectionSerializer(Collection.objects.filter(active=True),many=True).data,'menu':menu_data(),'delivery_message':s.delivery_message,'calendly':{'url':s.calendly_url,'primary':s.calendly_primary_color,'text':s.calendly_text_color,'background':s.calendly_background_color} if s.calendly_url else None,'social':{k:getattr(s,k+'_url') for k in ['instagram','facebook','youtube','pinterest'] if getattr(s,k+'_url')},'footer_tagline':s.footer_tagline,'footer':footer_data(s),'shop_page':shop_page(s),'occasions':[occasion_data(o) for o in Occasion.objects.filter(active=True)]})
+    return Response({'name':s.name,'schema':safe_schema(s.schema_json),'announcement':s.announcement,'hero_title':s.hero_title,'hero_description':s.hero_description,'hero_image':s.hero_image.url if s.hero_image else '/images/hero.webp','phone':s.phone,'email':s.email,'address':s.address,'cod_enabled':s.cod_enabled,'payment_ready':bool(settings.CASHFREE_APP_ID and settings.CASHFREE_SECRET_KEY),'google_ready':bool(settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET),'whatsapp_ready':bool(settings.WHATSAPP_TOKEN and settings.WHATSAPP_PHONE_ID and settings.WHATSAPP_OTP_TEMPLATE and settings.WHATSAPP_GRAPH_VERSION),'collections':CollectionSerializer(Collection.objects.filter(active=True),many=True).data,'menu':menu_data(),'delivery_message':s.delivery_message,'calendly':{'url':s.calendly_url,'primary':s.calendly_primary_color,'text':s.calendly_text_color,'background':s.calendly_background_color} if s.calendly_url else None,'social':{k:getattr(s,k+'_url') for k in ['instagram','facebook','youtube','pinterest'] if getattr(s,k+'_url')},'footer_tagline':s.footer_tagline,'footer':footer_data(s),'shop_page':shop_page(s),'occasions':[occasion_data(o) for o in Occasion.objects.filter(active=True)]})
 PRICE_STEPS=[5000,8000,10000,15000,20000,30000]
 SIZE_ORDER=['XXS','XS','S','M','L','XL','XXL','2XL','3XL','4XL','5XL','FREE']
 def media_url(f):return f.url if f else ''
@@ -472,6 +472,13 @@ def checkout(request):
     return Response({'order':OrderSerializer(o).data,'payment_session_id':session,'mode':settings.CASHFREE_ENVIRONMENT,'amount':int(o.total*100)})
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+def cancel_payment(request):
+    """Payment window closed without paying: cancel this attempt and give the items back to the bag."""
+    o=get_object_or_404(Order,user=request.user,pk=request.data.get('order'))
+    o,items=cancel_unpaid(o)
+    return Response({'order':OrderSerializer(o).data,'items':items})
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def verify_payment(request):
     o=get_object_or_404(Order,user=request.user,pk=request.data.get('order'))
     # Browser callbacks provide only our order UUID, never trusted payment status.
@@ -532,7 +539,7 @@ def page(request,slug):
     from .richtext import clean_html
     # Imported policy pages hold HTML (headings, lists); it is cleaned to a safe allow-list before display.
     html=clean_html(p.body) if re.search(r'<(p|h[2-4]|ul|ol|li|br|strong)\b',p.body,re.I) else ''
-    return Response({'title':p.title,'body':'' if html else p.body,'html':html,'updated':p.updated_at if hasattr(p,'updated_at') else None})
+    return Response({'title':p.title,'body':'' if html else p.body,'html':html,'schema':safe_schema(p.schema_json),'updated':p.updated_at if hasattr(p,'updated_at') else None})
 @api_view(['GET'])
 def health(request):return Response({'status':'ok'})
 

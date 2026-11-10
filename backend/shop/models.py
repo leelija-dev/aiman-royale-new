@@ -1,3 +1,4 @@
+import re
 import uuid
 from decimal import Decimal
 from django.db import models
@@ -11,7 +12,33 @@ class Customer(AbstractUser):
     avatar=models.ImageField('Profile photo',upload_to='avatars/',blank=True)
     avatar_url=models.URLField('Photo from Google',max_length=500,blank=True)
 
+
+def parse_schema(text):
+    """Custom JSON-LD pasted in admin -> list of schema objects.
+    Accepts plain JSON (an object or a list) or one/more <script type="application/ld+json"> blocks."""
+    import json
+    text=(text or '').strip()
+    if not text:return []
+    blocks=re.findall(r'<script[^>]*>(.*?)</script>',text,re.S|re.I) or [text]
+    out=[]
+    for b in blocks:
+        v=json.loads(b.strip())
+        out+=v if isinstance(v,list) else [v]
+    if not all(isinstance(x,dict) for x in out):raise ValueError('Each schema must be a JSON object.')
+    return out
+
+
+def validate_schema(text):
+    from django.core.exceptions import ValidationError as VE
+    try:parse_schema(text)
+    except Exception as e:
+        raise VE(f'This is not valid JSON-LD schema ({e}). Paste the JSON from a schema generator, e.g. {{"@context": "https://schema.org", "@type": "Product", ...}}.')
+
+
+SCHEMA_HELP='Optional. Paste your own JSON-LD (schema.org) — plain JSON or &lt;script type="application/ld+json"&gt; blocks. It is added to this page as-is, after the automatic schema.'
+
 class SiteSettings(models.Model):
+    schema_json=models.TextField('Custom schema (JSON-LD)',blank=True,validators=[validate_schema],help_text=SCHEMA_HELP)
     name=models.CharField(max_length=80,default='Aiman Royale')
     gstin=models.CharField('GSTIN (printed on invoices)',max_length=20,blank=True)
     return_days=models.PositiveSmallIntegerField('Return window (days after delivery)',default=7)
@@ -76,6 +103,7 @@ class SiteSettings(models.Model):
     def __str__(self):return self.name
 
 class Collection(models.Model):
+    schema_json=models.TextField('Custom schema (JSON-LD)',blank=True,validators=[validate_schema],help_text=SCHEMA_HELP)
     name=models.CharField(max_length=100)
     slug=models.SlugField(unique=True)
     description=models.TextField(blank=True)
@@ -152,6 +180,7 @@ class MenuLink(models.Model):
     def __str__(self):return f'{self.item} › {self.group} › {self.label}'
 
 class Product(models.Model):
+    schema_json=models.TextField('Custom schema (JSON-LD)',blank=True,validators=[validate_schema],help_text=SCHEMA_HELP)
     name=models.CharField(max_length=180)
     slug=models.SlugField(unique=True,max_length=200)
     description=models.TextField(blank=True)
@@ -350,6 +379,7 @@ class Subscriber(models.Model):
     email=models.EmailField(unique=True)
     created_at=models.DateTimeField(auto_now_add=True)
 class Page(models.Model):
+    schema_json=models.TextField('Custom schema (JSON-LD)',blank=True,validators=[validate_schema],help_text=SCHEMA_HELP)
     slug=models.SlugField(unique=True)
     title=models.CharField(max_length=150)
     body=models.TextField(help_text='Plain text (blank line = new paragraph), or simple HTML: headings, paragraphs, lists, bold, links.')

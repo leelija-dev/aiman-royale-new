@@ -141,7 +141,22 @@ export function CheckoutPage({site}: {site: Site}) {
       // Never trust the payment window alone: the server confirms the payment with Cashfree.
       const verified = await api<Order>('payments/verify/', 'POST', {order: d.order.id});
       setOrder(verified);
-      if (verified.status === 'pending') setError(result.error?.message ? `Payment was not completed: ${result.error.message}` : 'Payment has not been confirmed yet. If money was taken, do not pay again — check the status in your account.');
+      if (verified.status === 'pending') {
+        // Window closed without paying: cancel this attempt so the next try can use any payment method.
+        try {
+          const c = await api<{order: Order; items: number[]}>('payments/cancel/', 'POST', {order: d.order.id});
+          if (c.order.status === 'pending') throw Error('still pending');
+          if (['paid', 'processing'].includes(c.order.status)) { setOrder(c.order); write(COUPON_KEY, ''); write(NOTE_KEY, ''); return; }
+          setOrder(null); setKey(crypto.randomUUID()); bagChanged();
+          const full = await api<Bag>('cart/');
+          if (customId) setBag(b => b);
+          else if (itemIds.length) { const back = full.items.filter(i => c.items.includes(i.id)); setItemIds(back.map(i => i.id)); setBag({...full, items: back.length ? back : full.items}); }
+          else setBag(full);
+          setError('Payment was not completed, so nothing was charged. Your items are still in your bag — choose any payment method and try again.');
+        } catch {
+          setError(result.error?.message ? `Payment was not completed: ${result.error.message}` : 'Payment has not been confirmed yet. If money was taken, do not pay again — check the status in your account.');
+        }
+      }
       else { write(COUPON_KEY, ''); write(NOTE_KEY, ''); }
     } catch (e) { setError(err(e)); } finally { setBusy(false); }
   }

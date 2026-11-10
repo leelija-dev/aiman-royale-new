@@ -125,6 +125,39 @@ def release_order(order_id,status='expired'):
         for item in order.items.all():Variant.objects.filter(pk=item.variant_id).update(stock=F('stock')+item.quantity)
     order.status=status;order.save(update_fields=['status'])
 
+def cancel_unpaid(order):
+    """The customer closed the payment window without paying.
+    Confirm with Cashfree that nothing was paid, close that Cashfree order, release the stock
+    and put the items back in the bag — so the next try can use any payment method.
+    Returns (order, restored_cart_item_ids)."""
+    if order.status!='pending' or order.payment_method!='cashfree':return order,[]
+    if order.gateway_order_id:
+        details=gateway('GET','orders/'+order.gateway_order_id)  # raises ProviderUnavailable if unreachable
+        if details.get('order_status')=='PAID':
+            try:return verify_cashfree(order),[]
+            except ValidationError:order.refresh_from_db();return order,[]
+        try:gateway('PATCH','orders/'+order.gateway_order_id,{'order_status':'TERMINATED'})
+        except ProviderUnavailable:pass  # a late payment on a released order is marked refund_required
+    return restore_order_to_bag(order)
+
+@transaction.atomic
+def restore_order_to_bag(order,status='cancelled'):
+    order=Order.objects.select_for_update().get(pk=order.pk)
+    if order.status!='pending':return order,[]
+    custom=CustomRequest.objects.filter(order=order).exists()
+    release_order(order.pk,status)
+    order.refresh_from_db()
+    if custom:return order,[]
+    cart=Cart.objects.get_or_create(user=order.user)[0]
+    ids=[]
+    for it in order.items.select_related('variant'):
+        if not it.variant_id:continue
+        ci,made=CartItem.objects.get_or_create(cart=cart,variant_id=it.variant_id,defaults={'quantity':min(it.quantity,10),'measurements':it.measurements or {}})
+        if not made:
+            ci.quantity=min(10,max(ci.quantity,it.quantity));ci.save(update_fields=['quantity'])
+        ids.append(ci.pk)
+    return order,ids
+
 @transaction.atomic
 def settle_payment(payment):
     order=Order.objects.select_for_update().filter(gateway_order_id=payment.get('order_id')).first()
