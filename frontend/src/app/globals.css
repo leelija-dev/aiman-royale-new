@@ -2176,3 +2176,9 @@ body:has(.az-bar.show) .whatsapp-float{bottom:84px}
 .tag-best,.tag-off,.tag-other{background:#fff5f8!important;color:#a10000!important;border-color:#f0b9c9!important}
 .tag-pill svg{flex-shrink:0}
 .az-pills .tag-pill{font-size:12px;padding:6px 12px}
+
+/* All Products hero: picture keeps its 2:1 shape (banner 2400×1200), never cropped */
+.shop-hero{grid-template-columns:40% 60%;min-height:0;align-items:stretch}
+.shop-hero-image{min-height:0;aspect-ratio:2/1}
+.shop-hero-image img{object-fit:cover;object-position:center}
+@media(max-width:900px){.shop-hero{grid-template-columns:1fr}.shop-hero-image{min-height:0;aspect-ratio:2/1}}

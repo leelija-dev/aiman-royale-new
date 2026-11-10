@@ -102,8 +102,8 @@ export function HeroSlider({slides}: {slides: HeroSlide[]}) {
       const title = s.title.replace(/\n/g, ' '), alt = s.alt || title || s.imageTitle || 'Aiman Royale collection';
       const href = s.href || s.button?.href, text = !!(s.title || s.eyebrow || s.subtitle);
       const body = <>
-        <Image className={s.mobile ? 'hs-desk' : ''} src={s.image} alt={alt} title={s.imageTitle || undefined} fill priority={k === 0} sizes="100vw" quality={85}/>
-        {s.mobile && <Image className="hs-mob" src={s.mobile} alt={alt} title={s.imageTitle || undefined} fill priority={k === 0} sizes="100vw" quality={85}/>}
+        <Image className={s.mobile ? 'hs-desk' : ''} src={s.image} alt={alt} title={s.imageTitle || undefined} fill priority={k === 0} sizes="100vw" quality={92}/>
+        {s.mobile && <Image className="hs-mob" src={s.mobile} alt={alt} title={s.imageTitle || undefined} fill priority={k === 0} sizes="100vw" quality={92}/>}
         {text && <div className="hero-copy">{s.eyebrow && <p className="eyebrow">{s.eyebrow}</p>}{k === 0 ? <h1>{lines(s.title)}</h1> : <h2 className="hero-h">{lines(s.title)}</h2>}
           {s.subtitle && <p>{s.subtitle}</p>}{s.button && <span className="button">{s.button.label} <ArrowRight size={16}/></span>}</div>}
       </>;

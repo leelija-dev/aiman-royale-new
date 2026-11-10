@@ -34,7 +34,7 @@ export default async function Products({searchParams}: {searchParams: Promise<Qu
         <h1>{lines(t.title)}</h1>
         {t.text && <p>{t.text}</p>}
       </div>
-      <div className="shop-hero-image"><Image src={t.image || '/images/collection.webp'} alt="" fill priority sizes="(max-width:800px) 100vw, 52vw"/></div>
+      <div className="shop-hero-image"><Image src={t.image || '/images/shop-hero.webp'} alt="Aiman Royale festive and haldi collection" fill priority quality={92} sizes="(max-width:800px) 100vw, 60vw"/></div>
     </section>
 
     {tabs.length > 0 && <nav className="shop-tabs" aria-label="Categories">
