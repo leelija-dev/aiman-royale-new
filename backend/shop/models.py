@@ -88,7 +88,7 @@ class SiteSettings(models.Model):
     shop_eyebrow=models.CharField('Banner small heading',max_length=80,default='The Aiman Royale Collection')
     shop_title=models.CharField('Banner title',max_length=160,default='Find your occasion.\nDiscover your style.')
     shop_text=models.CharField('Banner text',max_length=300,default='Explore designer ethnic wear, from statement Anarkalis to festive suits and elegant occasion wear.')
-    shop_image=models.ImageField('Banner image',upload_to='editorial/',blank=True)
+    shop_image=models.ImageField('Banner image',upload_to='editorial/',blank=True,help_text='2:1 picture, at least 2400×1200 px, for a sharp banner. Leave empty to use the built-in Festive / Haldi banner.')
     shop_heading=models.CharField('Product list heading',max_length=80,default='All Products')
     shop_subheading=models.CharField('Product list subheading',max_length=120,default='Explore the collection')
     shop_fitting_title=models.CharField('Fitting banner title',max_length=160,default='Love the dress.\nLet’s find your fit.')
