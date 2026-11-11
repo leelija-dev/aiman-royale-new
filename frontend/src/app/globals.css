@@ -2182,3 +2182,65 @@ body:has(.az-bar.show) .whatsapp-float{bottom:84px}
 .shop-hero-image{min-height:0;aspect-ratio:2/1}
 .shop-hero-image img{object-fit:cover;object-position:center}
 @media(max-width:900px){.shop-hero{grid-template-columns:1fr}.shop-hero-image{min-height:0;aspect-ratio:2/1}}
+
+/* ================= Homepage – phone polish (Nov 11) ================= */
+@media(max-width:700px){
+ /* full-width sections (auto margins stopped them stretching in the column layout) */
+ .royale-home>.home-wrap{width:100%;margin-left:0;margin-right:0}
+ /* even, tighter rhythm between sections: ~36px */
+ .royale-home .home-wrap>section,.royale-home .home-wrap>div{margin-top:0;margin-bottom:0}
+ .royale-home .lh-sec,.royale-home .lh-products,.royale-home .lh-benefits{padding:18px 0}
+ .royale-home .lh-conf,.royale-home .lh-sale{margin:18px 0!important}
+ .royale-home .ar-consult{margin:18px 0;padding:26px 6%}
+ .royale-home .lh-notes{margin:18px 0}
+ .royale-home .lh-story{padding:18px 0 8px}
+ .royale-home .lh-head{margin-bottom:14px}
+ .royale-home .lh-head h2{margin-bottom:4px}
+ .royale-home .lh-head p{margin:0}
+ /* "View all categories": smaller and close to the cards */
+ .royale-home .lh-pill{margin-top:16px;padding:10px 22px;font-size:13px;box-shadow:none}
+ .royale-home .lh-pill:hover{transform:none}
+
+ /* category circles: scroll edge to edge, nothing clipped */
+ .royale-home>.lh-loved-wrap{padding-left:0!important;padding-right:0!important}
+ .lh-loved{grid-auto-columns:76px;gap:10px;padding:0 4%;scroll-padding:0 4%}
+ .lh-loved a>span{width:72px;height:72px;border:2px solid #fff;box-shadow:0 0 0 1px #f6d5df}
+ .lh-loved strong{font-size:11.5px;line-height:1.25;margin-top:6px}
+
+ /* product rows: clean card, brand on its own line, compact tags */
+ .royale-home .home-row{grid-auto-columns:47%!important;gap:10px!important}
+ .lh-products .cp-card{border-radius:8px;box-shadow:0 2px 10px #0000000d}
+ .lh-products .cp-info{display:block;padding:8px 8px 10px}
+ .lh-products .cp-brand{display:block;border:0;padding:0;margin:0 0 2px;font-size:11px;font-weight:600;letter-spacing:.3px;color:#000;text-transform:none}
+ .lh-products .cp-info h3{font-size:12px;font-weight:400;text-transform:none;color:#555;margin:0 0 4px}
+ .lh-products .cp-price-line{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;font-size:12.5px}
+ .lh-products .cp-price-line strong{font-size:13.5px;color:#000}
+ .lh-products .cp-price-line del{font-size:11px}
+ .lh-products .cp-price-line em{font-size:11px}
+ .cp-tags{gap:4px;margin-top:6px;flex-wrap:wrap}
+ .cp-tags .tag-pill{font-size:9.5px!important;padding:3px 7px!important;gap:3px;white-space:nowrap;letter-spacing:.1px}
+ .cp-tags .tag-pill svg{width:10px;height:10px}
+ .lh-row-head{align-items:center;margin-bottom:12px}
+ .lh-row-head h2{font-size:19px!important;line-height:1.25}
+ .lh-row-head a{font-size:12.5px;white-space:nowrap}
+
+ /* The Wedding Edit: centred title, wide picture cards */
+ .royale-home .lh-head.left,.royale-home .lh-head.line{text-align:center}
+ .royale-home .lh-head.line h2:after{left:50%;transform:translateX(-50%)}
+ .lh-tall{grid-auto-columns:66%;gap:12px}
+ .lh-tall-card{aspect-ratio:2/3;border-radius:10px}
+ .lh-tall-card:after{background:linear-gradient(180deg,transparent 55%,#000000b3)}
+ .lh-tall-card div{bottom:14px;padding:0 10px}
+ .lh-tall-card h3{font-size:19px;margin:0 0 8px;text-shadow:0 1px 6px #0006}
+ .lh-tall-card span{padding:7px 18px;font-size:11px;letter-spacing:1px;text-transform:uppercase;background:#fff;color:#000}
+
+ /* Our Signature Standouts: two clean picture cards side by side, text under the picture */
+ .lh-duo{grid-template-columns:1fr 1fr;gap:10px}
+ .lh-duo a{aspect-ratio:auto;display:flex;flex-direction:column;background:#fff;border:1px solid #f6d5df;border-radius:10px}
+ .lh-duo a:after{display:none}
+ .lh-duo img{position:relative!important;width:100%!important;height:auto!important;aspect-ratio:3/4;object-position:top}
+ .lh-duo div{position:static;transform:none;max-width:none;padding:10px 10px 12px;text-align:center}
+ .royale-home .lh-duo h3,.royale-home .lh-duo a div h3{font-size:16px;line-height:1.25;margin:0 0 8px;color:#000;-webkit-text-fill-color:#000}
+ .lh-duo p{display:none}
+ .lh-duo span{padding:6px 14px;font-size:10.5px}
+}
