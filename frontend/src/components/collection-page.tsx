@@ -2,7 +2,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
-import {useRef, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {Heart, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ArrowUpRight, ArrowLeft, ArrowRight, Scissors, Truck, Star, Tag, Sparkles} from 'lucide-react';
 import {api} from '@/lib/client';
 import {useWishlist, loginHere} from '@/lib/wishlist';
@@ -114,6 +114,17 @@ export function Results({data, query, base, extra = {}, facets, heading, subhead
   const router = useRouter();
   const [items, setItems] = useState(data.results), [page, setPage] = useState(data.page), [busy, setBusy] = useState(false);
   const sort = list(query.sort)[0] || '';
+  // After a filter, sort or page change, bring the top of the results into view (below the sticky header),
+  // so a shorter list never leaves the visitor looking at the footer.
+  const qs = toParams(query).toString(), first = useRef(true), box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setItems(data.results); setPage(data.page);
+    if (first.current) { first.current = false; return; }
+    const el = box.current?.closest('.cp-shop') || box.current; if (!el) return;
+    const head = (document.querySelector('.hk-header') as HTMLElement | null)?.offsetHeight || 0;
+    const top = el.getBoundingClientRect().top + window.scrollY - head - 12;
+    if (window.scrollY > top + 1 || el.getBoundingClientRect().top > window.innerHeight * .6) window.scrollTo({top: Math.max(0, top), behavior: 'smooth'});
+  }, [qs, data]); // eslint-disable-line react-hooks/exhaustive-deps
   const more = async () => {
     setBusy(true);
     try { const p = toParams({...query, ...extra}); p.set('page', String(page + 1)); const next = await api<ProductPage>(`products/?${p}`); setItems(i => [...i, ...next.results]); setPage(next.page); }
@@ -122,7 +133,7 @@ export function Results({data, query, base, extra = {}, facets, heading, subhead
   const go = (p: URLSearchParams) => { p.delete('page'); router.push(`${base}${p.size ? `?${p}` : ''}#collection`, {scroll: false}); };
   const chip = (k: string, v: string) => { const p = toParams(query); if (p.get(k) === v) p.delete(k); else p.set(k, v); go(p); };
   const CHIPS: [string, string, string][] = [['New', 'sort', 'newest'], ['Ready to Ship', 'ready', '1'], ['On Sale', 'sale', '1'], ['Custom-fit', 'custom', '1']];
-  return <div className="cp-results">
+  return <div className="cp-results" ref={box}>
     <div className="cp-results-head">
       <div className="cp-chips" role="group" aria-label="Quick filters">{CHIPS.map(([label, k, v]) => { const on = list(query[k])[0] === v;
         return <button type="button" key={label} aria-pressed={on} className={on ? 'on' : ''} onClick={() => chip(k, v)}>{label}</button>; })}</div>

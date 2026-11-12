@@ -1,7 +1,7 @@
 'use client';
 import Image from 'next/image';
 import Link from 'next/link';
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {ArrowLeft, ArrowRight, ChevronRight, Landmark, Banknote, CreditCard, Headphones, Phone, Mail, TicketPercent, CheckCircle2, Lock} from 'lucide-react';
 import {api, bagChanged, err} from '@/lib/client';
@@ -63,6 +63,9 @@ export function CheckoutPage({site}: {site: Site}) {
   const [coupon, setCoupon] = useState(''), [promoMsg, setPromoMsg] = useState<{ok: boolean; text: string} | null>(null), [note, setNote] = useState('');
   const [itemIds, setItemIds] = useState<number[]>([]), [customId, setCustomId] = useState(0);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [order, setOrder] = useState<Order | null>(null), [key, setKey] = useState('');
+  // Order placed: show the confirmation from the top of the page (it is much shorter than the checkout form).
+  const doneRef = useRef<HTMLElement>(null), placed = !!order && ['paid', 'cod', 'processing', 'shipped', 'delivered'].includes(order.status);
+  useEffect(() => { if (placed) { window.scrollTo({top: 0, behavior: 'auto'}); doneRef.current?.focus({preventScroll: true}); } }, [placed]);
 
   useEffect(() => {
     setKey(crypto.randomUUID());
@@ -161,7 +164,7 @@ export function CheckoutPage({site}: {site: Site}) {
     } catch (e) { setError(err(e)); } finally { setBusy(false); }
   }
 
-  if (order && ['paid', 'cod', 'processing', 'shipped', 'delivered'].includes(order.status)) return <section className="cp co-done"><CheckCircle2 size={54}/>
+  if (order && ['paid', 'cod', 'processing', 'shipped', 'delivered'].includes(order.status)) return <section className="cp co-done" ref={doneRef} tabIndex={-1}><CheckCircle2 size={54}/>
     <p className="cp-eyebrow">Thank you for choosing Aiman Royale</p><h1>Your order is placed.</h1>
     <p>Order <strong>{order.id.slice(0, 8).toUpperCase()}</strong> · {money(order.total)}</p>
     <p>{order.status === 'cod' ? 'Please keep the amount ready — payment is collected on delivery.' : 'Your payment has been received and confirmed.'} We’ll email you updates.</p>

@@ -2244,3 +2244,7 @@ body:has(.az-bar.show) .whatsapp-float{bottom:84px}
  .lh-duo p{display:none}
  .lh-duo span{padding:6px 14px;font-size:10.5px}
 }
+
+/* Category / All Products sidebar scrolls with the page (no sticky end-alignment with the grid) */
+@media(min-width:901px){.cp-shop .cp-filters{position:static;top:auto;max-height:none;overflow:visible}}
+.co-done:focus{outline:none}
