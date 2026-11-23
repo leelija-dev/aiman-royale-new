@@ -64,7 +64,6 @@ export default async function CollectionPage({params, searchParams}: Props) {
     ...occasionCards.map((o, i) => ({title: `${o.name} ${c.name}`, href: `${base}?occasion=${o.slug}#collection`, image: occasionImage(o, i)})),
     ...others.map((s, i) => ({title: s.name, href: `/collections/${s.slug}`, image: s.image || STORY_FALLBACK[i % STORY_FALLBACK.length]})),
   ].slice(0, 10);
-  const story = (site?.collections || []).filter(s => s.slug !== slug).slice(0, 3);
   const t = c.content || fallbackContent(c.name), qa = t.faqs, f = t.fitting;
   const faqLd = {'@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: qa.map(x => ({'@type': 'Question', name: x.question, acceptedAnswer: {'@type': 'Answer', text: x.answer}}))};
 
@@ -95,27 +94,9 @@ export default async function CollectionPage({params, searchParams}: Props) {
       </div>
     </section>
 
-    <section className="cp-wrap cp-seo">
-      <div>
-        <h2>{t.seo_heading}</h2>
-        {t.seo_body.split(/\n{2,}/).filter(Boolean).map((para, i) => <p key={i}>{para}</p>)}
-        <Link href="/info/size-guide" className="cp-text-link">Read the Collection Guide <ArrowRight size={16}/></Link>
-      </div>
-      {t.guides.length > 0 && <div className="cp-accordion">{t.guides.map(g => <details key={g.question}><summary>{g.question}</summary><p>{g.answer}</p></details>)}</div>}
-    </section>
-
-    {story.length > 0 && <section className="cp-wrap cp-story">
-      <h2>Continue your style story.</h2>
-      <div className="cp-story-grid">{story.map((s, i) =>
-        <Link key={s.slug} href={`/collections/${s.slug}`} className="cp-story-card">
-          <div><Image src={s.image || STORY_FALLBACK[i % STORY_FALLBACK.length]} alt={s.name} fill sizes="(max-width:700px) 100vw, 32vw"/></div>
-          <span>{s.name} <ArrowRight size={16}/></span>
-        </Link>)}</div>
-    </section>}
-
     {qa.length > 0 && <section className="cp-wrap cp-faq">
       <h2>A little guidance, before you choose.</h2>
-      <div className="cp-accordion">{qa.map((x, i) => <details key={x.question}><summary><span className="cp-faq-icon">{FAQ_ICONS[i % 3]}</span>{x.question}</summary><p>{x.answer}</p></details>)}</div>
+      <div className="cp-accordion">{qa.map((x, i) => <details key={x.question}><summary><span className="cp-faq-icon">{FAQ_ICONS[i % 3]}</span>{x.question}</summary>{x.html ? <div className="cp-faq-answer" dangerouslySetInnerHTML={{__html: x.html}}/> : <p>{x.answer}</p>}</details>)}</div>
     </section>}
     {t.details && <CategoryDetails html={t.details}/>}
   </div>;

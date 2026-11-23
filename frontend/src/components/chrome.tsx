@@ -39,7 +39,7 @@ function SearchBox({site, cls}: {site: Site; cls: string}) {
   return <form ref={box} action="/products" className={`hk-search ${cls}${open ? ' open' : ''}`} role="search" onSubmit={submit}>
     <input name="q" type="search" value={q} onChange={e => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} autoComplete="off"
       onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false); e.currentTarget.blur(); } }}
-      aria-label="Search products" aria-expanded={open} aria-controls={`${cls}-panel`} placeholder="Search for suits, anarkali, gowns…"/>
+      role="combobox" aria-autocomplete="list" aria-label="Search products" aria-expanded={open} aria-controls={`${cls}-panel`} placeholder="Search for suits, anarkali, gowns…"/>
     <button type="submit" aria-label="Search"><Search size={18}/></button>
     {open && <div className="hk-panel" id={`${cls}-panel`}>
       <div className="hk-panel-in">
@@ -152,7 +152,7 @@ const SERVICES: [React.ReactNode, string, string][] = [[<Headset key="h" size={3
 function FooterGroup({id, title, open, toggle, children}: {id: string; title: string; open: string | null; toggle: (k: string) => void; children: React.ReactNode}) {
   const on = open === id;
   return <div className={on ? 'kf-group open' : 'kf-group'}>
-    <h4><button type="button" aria-expanded={on} aria-controls={`kf-${id}`} onClick={() => toggle(id)}>{title}<ChevronDown size={18}/></button></h4>
+    <h2 className="kf-h"><button type="button" aria-expanded={on} aria-controls={`kf-${id}`} onClick={() => toggle(id)}>{title}<ChevronDown size={18}/></button></h2>
     <div className="kf-body" id={`kf-${id}`}>{children}</div>
   </div>;
 }

@@ -1,7 +1,6 @@
 'use client';
 import {useEffect, useState} from 'react';
 import {api} from '@/lib/client';
-import type {Product} from '@/lib/types';
 
 // One shared copy of the customer's wishlist for every heart on the page.
 // null = not loaded yet; signedIn=false = visitor is not signed in.
@@ -29,14 +28,19 @@ async function savePending() {
   try { await api('wishlist/', 'POST', {product: id}); ids!.add(id); toast('Added to your wishlist ♥'); } catch {}
 }
 
+let checked = 0;
 function load(force = false) {
-  if (!force && (ids || loading)) return loading || Promise.resolve();
-  loading = api<Product[]>('wishlist/')
-    .then(async list => { ids = new Set(list.map(p => p.id)); signedIn = true; await savePending(); })
-    .catch(() => { ids = new Set(); signedIn = false; })
+  if (loading) return loading;
+  if (!force && ids) return Promise.resolve();
+  checked = Date.now();
+  loading = api<{signed_in: boolean; ids: number[]}>('wishlist/ids/')
+    .then(async r => { ids = new Set(r.ids); signedIn = r.signed_in; if (signedIn) await savePending(); })
+    .catch(() => { ids = ids || new Set(); signedIn = false; })
     .finally(() => { loading = null; window.dispatchEvent(new Event(EVENT)); });
   return loading;
 }
+/** Signed-out visitors: look again now and then (they may have signed in in another tab), not once per heart. */
+const recheck = () => load(!signedIn && Date.now() - checked > 15000);
 
 /** Returns [isSaved, toggle]. toggle() resolves to 'login' when the visitor must sign in first. */
 export function useWishlist(productId: number): [boolean, () => Promise<'added' | 'removed' | 'login'>] {
@@ -44,7 +48,7 @@ export function useWishlist(productId: number): [boolean, () => Promise<'added' 
   useEffect(() => {
     const sync = () => setSaved(!!ids?.has(productId));
     // Re-check when the visitor was signed out earlier (they may have signed in since).
-    sync(); load(!signedIn);
+    sync(); recheck();
     window.addEventListener(EVENT, sync);
     return () => window.removeEventListener(EVENT, sync);
   }, [productId]);
@@ -74,7 +78,7 @@ export function useWishlistCount() {
   useEffect(() => {
     const sync = () => setN(ids?.size || 0);
     const refresh = () => { load(true); };
-    sync(); load(!signedIn);
+    sync(); recheck();
     window.addEventListener(EVENT, sync);
     window.addEventListener('bag-changed', refresh); // fired on sign in / sign out
     return () => { window.removeEventListener(EVENT, sync); window.removeEventListener('bag-changed', refresh); };

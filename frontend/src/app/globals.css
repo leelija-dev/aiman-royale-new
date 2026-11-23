@@ -2246,5 +2246,33 @@ body:has(.az-bar.show) .whatsapp-float{bottom:84px}
 }
 
 /* Category / All Products sidebar scrolls with the page (no sticky end-alignment with the grid) */
-@media(min-width:901px){.cp-shop .cp-filters{position:static;top:auto;max-height:none;overflow:visible}}
+
 .co-done:focus{outline:none}
+/* Nov 23: filters sidebar stays in view beside the products (below the 136px sticky header) and scrolls on its own */
+@media(min-width:901px){
+ .cp-shop{align-items:start;scroll-margin-top:150px}
+ .cp-shop .cp-filters{position:sticky;top:152px;max-height:calc(100vh - 172px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#e7b8c6 transparent;padding-bottom:16px}
+ .cp-shop .cp-filters::-webkit-scrollbar{width:6px}.cp-shop .cp-filters::-webkit-scrollbar-thumb{background:#e7b8c6;border-radius:6px}.cp-shop .cp-filters::-webkit-scrollbar-track{background:transparent}
+}
+.cp-faq-answer{margin:12px 0 0;font-size:16px;color:#333333}.cp-faq-answer p{margin:0 0 10px;color:#333333}.cp-faq-answer ul,.cp-faq-answer ol{margin:0 0 10px 1.3em;padding:0}.cp-faq-answer a{color:var(--wine);text-decoration:underline}.cp-faq-answer h2,.cp-faq-answer h3,.cp-faq-answer h4{font-size:17px;margin:10px 0 6px;letter-spacing:0;text-transform:none}
+/* Nov 23: Custom Measurements → Add to Cart / Buy Now */
+.cz-main .cz-field>label:after{content:' *';color:#a10000}
+.cz-sizes .cz-oos{font-style:normal;font-weight:500;font-size:10px;color:#a10000}
+.cz-foot>span{flex-wrap:wrap}.cz-foot .cz-send{display:inline-flex;align-items:center;gap:5px;margin-left:8px;padding:0;border:0;background:none;color:#a10000;font-size:12.5px;text-decoration:underline;cursor:pointer}
+.pd-fit-summary{display:flex;align-items:flex-start;gap:10px;margin-top:12px;padding:11px 14px;border:1px solid #f6d5df;border-radius:8px;background:#fff8fa;color:#a10000}
+.pd-fit-summary span{flex:1;display:flex;flex-direction:column;gap:2px;font-size:13.5px;color:#333333}.pd-fit-summary strong{font-size:13px;color:#000;font-weight:600}.pd-fit-summary small{font-size:12px;color:#555555}
+.pd-fit-summary button{border:0;background:none;padding:0;color:#a10000;font-size:13px;font-weight:600;text-decoration:underline;cursor:pointer}
+.bag-measure{margin:-4px 0 10px;font-size:12.5px;color:#555555;line-height:1.5}
+.cz-foot .pd-btn{white-space:nowrap}.cz-main .cz-field>label:after{margin-left:3px}
+.route-loading{min-height:calc(100vh + 40px);min-height:calc(100dvh + 40px)}
+
+/* Nov 23: PageSpeed accessibility fixes */
+.kf h2.kf-h{margin:0 0 14px;font-family:var(--font-body);font-size:14px;line-height:1.4;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#000}
+.kf h2.kf-h button{all:unset;display:flex;align-items:center;justify-content:space-between;width:100%;cursor:default}.kf h2.kf-h button svg{display:none}
+@media(max-width:900px){.kf h2.kf-h{margin:0}.kf h2.kf-h button{cursor:pointer;padding:15px 0;font-size:13px}.kf h2.kf-h button svg{display:block;transition:transform .2s}}
+.cp-price-line del,.cp-card del{color:#666666}
+.pc-dots{gap:2px}.pc-dots button{position:relative;width:24px;height:24px;background:transparent!important;border-radius:0}
+.pc-dots button:after{content:'';position:absolute;left:50%;top:50%;width:9px;height:9px;transform:translate(-50%,-50%);border-radius:999px;background:#ffffff8c;transition:width .3s}
+.pc-dots button.on{width:32px}.pc-dots button.on:after{width:26px;background:#fff}
+.pc-dots.static button:after{background:#f6d5df}.pc-dots.static button.on:after{background:#a10000}
+.lh-notes-by small{color:#666666}

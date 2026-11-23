@@ -68,6 +68,7 @@ export function BagPage({suggestions, swatches}: {suggestions: Product[]; swatch
             <div className="bag-card-info">
               <h2><Link href={`/products/${i.product.slug}`}>{i.product.name}</Link></h2>
               <dl><div><dt>Size</dt><dd>{i.variant.size}</dd></div><div><dt>Colour</dt><dd>{i.variant.colour}{swatch && <span className="bag-swatch" style={{background: swatch}}/>}</dd></div><div><dt>Type</dt><dd>{custom ? 'Custom measurements' : 'Stitched'}</dd></div></dl>
+              {custom && <p className="bag-measure">{Object.entries(i.measurements).filter(([k, v]) => k !== 'unit' && typeof v !== 'object').map(([k, v]) => `${k[0].toUpperCase()}${k.slice(1).replace('_', ' ')} ${v}`).join(' · ')} {String(i.measurements.unit || '')}</p>}
               <p className="bag-price"><strong>{money(Number(i.product.price) * i.quantity)}</strong>{Number(i.product.mrp) > Number(i.product.price) && <del>{money(Number(i.product.mrp) * i.quantity)}</del>}</p>
               <div className="pd-qty"><button type="button" aria-label="Decrease quantity" disabled={busy || i.quantity <= 1} onClick={() => change(i.id, i.quantity - 1)}><Minus size={16}/></button><span>{i.quantity}</span><button type="button" aria-label="Increase quantity" disabled={busy || i.quantity >= i.variant.stock} onClick={() => change(i.id, i.quantity + 1)}><Plus size={16}/></button></div>
               <p className="bag-links"><Link href={`/products/${i.product.slug}`}>Edit size</Link><span>|</span><button type="button" onClick={() => moveToWishlist(i.id, i.product.id)}>Move to Wishlist</button><span>|</span><button type="button" disabled={busy} onClick={() => change(i.id)}>Remove</button></p>
@@ -96,7 +97,7 @@ export function BagPage({suggestions, swatches}: {suggestions: Product[]; swatch
       </aside>
     </div>}
 
-    <section className="bag-fit"><div><h2>Not sure about your size?</h2><p>Speak with our team before you place your order.</p><div><Link href="/appointment" className="button">Book a Fitting</Link><Link href="/info/size-guide" className="button outline">Size Guide</Link></div></div>
+    <section className="bag-measure"><div><h2>Not sure about your size?</h2><p>Speak with our team before you place your order.</p><div><Link href="/appointment" className="button">Book a Fitting</Link><Link href="/info/size-guide" className="button outline">Size Guide</Link></div></div>
       <div className="bag-fit-img"><Image src="/images/fitting.webp" alt="A stylist measuring a client" fill sizes="(max-width:800px) 100vw, 50vw"/></div></section>
 
     {also.length > 0 && <section className="bag-wrap bag-also"><h2>You may also love</h2><div className="bag-also-grid">{also.map(p =>

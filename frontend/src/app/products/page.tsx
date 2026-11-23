@@ -25,7 +25,7 @@ export default async function Products({searchParams}: {searchParams: Promise<Qu
   const t = site?.shop_page || FALLBACK;
   const picked = list(q.collection);
   const tabs = (facets.collections || []).slice(0, 6);
-  const tabHref = (slug?: string) => { const p = toParams(q); p.delete('collection'); p.delete('page'); if (slug) p.set('collection', slug); return `/products${p.size ? `?${p}` : ''}#collection`; };
+  const tabHref = (slug?: string) => { const p = toParams(q); p.delete('collection'); p.delete('page'); if (slug) p.set('collection', slug); return `/products${p.size ? `?${p}` : ''}`; };
 
   return <div className="cp shop">
     <section className="shop-hero">
