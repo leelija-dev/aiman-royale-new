@@ -10,6 +10,16 @@ import {Product, ProductPage, Facets, money, photo, discount} from '@/lib/types'
 import type {MenuLink} from '@/lib/menu';
 import {type Query, list, toParams} from '@/lib/query';
 
+/** Before a filter, sort or page change, jump back to the top of the product area (just below the sticky
+ *  header) so the new results start in view. Navigations then use scroll:false and no #hash, so nothing
+ *  else moves the page afterwards. */
+export function toShop() {
+  const el = document.getElementById('collection'); if (!el) return;
+  const head = (document.querySelector('.hk-header') as HTMLElement | null)?.offsetHeight || 0;
+  const top = Math.max(0, el.getBoundingClientRect().top + window.scrollY - head - 8);
+  if (window.scrollY > top + 1) window.scrollTo({top, behavior: 'instant' as ScrollBehavior});
+}
+
 /* ---------- Filters sidebar ---------- */
 function Group({title, children, start = false}: {title: string; children: React.ReactNode; start?: boolean}) {
   const [open, setOpen] = useState(start);
@@ -21,7 +31,7 @@ function Group({title, children, start = false}: {title: string; children: React
 
 export function Filters({base, query, styles = [], facets, variant = 'category'}: {base: string; query: Query; styles?: MenuLink[]; facets: Facets; variant?: 'category' | 'shop'}) {
   const router = useRouter();
-  const go = (p: URLSearchParams) => { p.delete('page'); router.push(`${base}${p.size ? `?${p}` : ''}#collection`, {scroll: false}); };
+  const go = (p: URLSearchParams) => { p.delete('page'); toShop(); router.push(`${base}${p.size ? `?${p}` : ''}`, {scroll: false}); };
   const toggle = (key: string, value: string) => {
     const p = toParams(query); const cur = p.getAll(key); p.delete(key);
     (cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value]).forEach(v => p.append(key, v));
@@ -49,7 +59,7 @@ export function Filters({base, query, styles = [], facets, variant = 'category'}
       {Number(facets.price.max) > 0 && <p className="cp-range">{money(facets.price.min)} – {money(facets.price.max)}</p>}
     </Group>;
   return <aside className={open ? 'cp-filters open' : 'cp-filters'} aria-label="Filters">
-    <div className="cp-filters-head"><h2><button type="button" className="cp-filter-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>Filters<ChevronUp size={18} className={open ? '' : 'flip'}/></button></h2>{active && <Link href={`${base}#collection`} scroll={false}>Clear all</Link>}</div>
+    <div className="cp-filters-head"><h2><button type="button" className="cp-filter-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>Filters<ChevronUp size={18} className={open ? '' : 'flip'}/></button></h2>{active && <Link href={base} scroll={false} onClick={toShop}>Clear all</Link>}</div>
     {variant === 'shop'
       ? <>{category}{occasion}{colour}{size}{priceRanges || priceInputs}</>
       : <>{styles.length > 0 && <Group title="Sub Category" start>{styles.map(s => <Link key={s.href} href={s.href} className="cp-collection-link"><span>{s.label}</span>{typeof s.count === 'number' && <em className="cp-count">{s.count}</em>}</Link>)}</Group>}{colour}{occasion}{size}{priceInputs}</>}
@@ -110,30 +120,20 @@ export function BandCarousel({cards}: {cards: {title: string; href: string; imag
 export function Results({data, query, base, extra = {}, facets, heading, subheading, paging = 'more'}: {data: ProductPage; query: Query; base: string; extra?: Record<string, string>;
   facets?: Facets; heading?: string; subheading?: string; paging?: 'more' | 'pages'}) {
   const hex = Object.fromEntries((facets?.colours || []).map(c => [c.name.toLowerCase(), c.hex]));
-  const pageUrl = (n: number) => { const p = toParams(query); if (n > 1) p.set('page', String(n)); else p.delete('page'); return `${base}${p.size ? `?${p}` : ''}#collection`; };
+  const pageUrl = (n: number) => { const p = toParams(query); if (n > 1) p.set('page', String(n)); else p.delete('page'); return `${base}${p.size ? `?${p}` : ''}`; };
   const router = useRouter();
   const [items, setItems] = useState(data.results), [page, setPage] = useState(data.page), [busy, setBusy] = useState(false);
   const sort = list(query.sort)[0] || '';
-  // After a filter, sort or page change, bring the top of the results into view (below the sticky header),
-  // so a shorter list never leaves the visitor looking at the footer.
-  const qs = toParams(query).toString(), first = useRef(true), box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    setItems(data.results); setPage(data.page);
-    if (first.current) { first.current = false; return; }
-    const el = box.current?.closest('.cp-shop') || box.current; if (!el) return;
-    const head = (document.querySelector('.hk-header') as HTMLElement | null)?.offsetHeight || 0;
-    const top = el.getBoundingClientRect().top + window.scrollY - head - 12;
-    if (window.scrollY > top + 1 || el.getBoundingClientRect().top > window.innerHeight * .6) window.scrollTo({top: Math.max(0, top), behavior: 'smooth'});
-  }, [qs, data]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setItems(data.results); setPage(data.page); }, [data]);
   const more = async () => {
     setBusy(true);
     try { const p = toParams({...query, ...extra}); p.set('page', String(page + 1)); const next = await api<ProductPage>(`products/?${p}`); setItems(i => [...i, ...next.results]); setPage(next.page); }
     finally { setBusy(false); }
   };
-  const go = (p: URLSearchParams) => { p.delete('page'); router.push(`${base}${p.size ? `?${p}` : ''}#collection`, {scroll: false}); };
+  const go = (p: URLSearchParams) => { p.delete('page'); toShop(); router.push(`${base}${p.size ? `?${p}` : ''}`, {scroll: false}); };
   const chip = (k: string, v: string) => { const p = toParams(query); if (p.get(k) === v) p.delete(k); else p.set(k, v); go(p); };
   const CHIPS: [string, string, string][] = [['New', 'sort', 'newest'], ['Ready to Ship', 'ready', '1'], ['On Sale', 'sale', '1'], ['Custom-fit', 'custom', '1']];
-  return <div className="cp-results" ref={box}>
+  return <div className="cp-results">
     <div className="cp-results-head">
       <div className="cp-chips" role="group" aria-label="Quick filters">{CHIPS.map(([label, k, v]) => { const on = list(query[k])[0] === v;
         return <button type="button" key={label} aria-pressed={on} className={on ? 'on' : ''} onClick={() => chip(k, v)}>{label}</button>; })}</div>
@@ -147,11 +147,11 @@ export function Results({data, query, base, extra = {}, facets, heading, subhead
     </div>
     {(heading || subheading) && <div className="cp-results-title">{heading && <h2>{heading}</h2>}{subheading && <p className="cp-subheading">{subheading}</p>}</div>}
     {items.length ? <div className="cp-grid grid">{items.map(p => <Card key={p.id} p={p} hex={hex}/>)}</div>
-      : <div className="empty"><h2>A new story is coming.</h2><p>No styles match these filters yet.</p><Link className="button outline" href={`${base}#collection`} scroll={false}>Clear filters</Link></div>}
+      : <div className="empty"><h2>A new story is coming.</h2><p>No styles match these filters yet.</p><Link className="button outline" href={base} scroll={false} onClick={toShop}>Clear filters</Link></div>}
     {paging === 'pages' && data.pages > 1 && <nav className="cp-pages" aria-label="Product pages">
-      {data.page > 1 ? <Link href={pageUrl(data.page - 1)} scroll={false} aria-label="Previous page"><ArrowLeft size={16}/></Link> : <span aria-hidden><ArrowLeft size={16}/></span>}
-      {Array.from({length: data.pages}, (_, i) => i + 1).map(n => <Link key={n} href={pageUrl(n)} scroll={false} aria-current={n === data.page ? 'page' : undefined} className={n === data.page ? 'on' : ''}>{n}</Link>)}
-      {data.page < data.pages ? <Link href={pageUrl(data.page + 1)} scroll={false} aria-label="Next page"><ArrowRight size={16}/></Link> : <span aria-hidden><ArrowRight size={16}/></span>}
+      {data.page > 1 ? <Link href={pageUrl(data.page - 1)} scroll={false} onClick={toShop} aria-label="Previous page"><ArrowLeft size={16}/></Link> : <span aria-hidden><ArrowLeft size={16}/></span>}
+      {Array.from({length: data.pages}, (_, i) => i + 1).map(n => <Link key={n} href={pageUrl(n)} scroll={false} onClick={toShop} aria-current={n === data.page ? 'page' : undefined} className={n === data.page ? 'on' : ''}>{n}</Link>)}
+      {data.page < data.pages ? <Link href={pageUrl(data.page + 1)} scroll={false} onClick={toShop} aria-label="Next page"><ArrowRight size={16}/></Link> : <span aria-hidden><ArrowRight size={16}/></span>}
     </nav>}
     {paging === 'more' && page < data.pages && <div className="center"><button type="button" className="cp-more" disabled={busy} onClick={more}>{busy ? 'Loading…' : 'Load More'}</button></div>}
   </div>;

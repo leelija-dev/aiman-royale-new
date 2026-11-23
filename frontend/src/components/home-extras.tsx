@@ -1,9 +1,24 @@
 'use client';
-import Image from 'next/image';
+import Image, {getImageProps} from 'next/image';
 import Link from 'next/link';
 import {useEffect, useRef, useState} from 'react';
+import {preload} from 'react-dom';
 import {ChevronLeft, ChevronRight, ArrowRight, FileDown} from 'lucide-react';
 import {openSizeGuide} from '@/components/size-guide';
+
+/** Desktop + mobile banner as one <picture>: each phone or computer downloads only the image it shows
+ *  (two priority <Image>s made phones download the big desktop banner too). */
+function HeroPicture({desk, mob, alt, title, first}: {desk: string; mob: string; alt: string; title?: string; first: boolean}) {
+  const common = {alt, fill: true, sizes: '100vw', quality: 92, ...(first ? {fetchPriority: 'high' as const, loading: 'eager' as const} : {})};
+  const {props: {srcSet: mobSet}} = getImageProps({...common, src: mob});
+  const {props: {srcSet: deskSet, ...img}} = getImageProps({...common, src: desk});
+  if (first) {  // start the right banner download straight from the HTML head
+    preload(String(img.src), {as: 'image', imageSrcSet: mobSet, imageSizes: '100vw', media: '(max-width:700px)', fetchPriority: 'high'});
+    preload(String(img.src), {as: 'image', imageSrcSet: deskSet, imageSizes: '100vw', media: '(min-width:701px)', fetchPriority: 'high'});
+  }
+  return <picture><source media="(max-width:700px)" srcSet={mobSet}/><source media="(min-width:701px)" srcSet={deskSet}/>
+    {/* eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text */}<img {...img} title={title || undefined}/></picture>;
+}
 
 /* ---------- Promo banner carousel ---------- */
 type Slide = {title: string; image: string; href: string; caption: string};
@@ -102,8 +117,8 @@ export function HeroSlider({slides}: {slides: HeroSlide[]}) {
       const title = s.title.replace(/\n/g, ' '), alt = s.alt || title || s.imageTitle || 'Aiman Royale collection';
       const href = s.href || s.button?.href, text = !!(s.title || s.eyebrow || s.subtitle);
       const body = <>
-        <Image className={s.mobile ? 'hs-desk' : ''} src={s.image} alt={alt} title={s.imageTitle || undefined} fill priority={k === 0} sizes="100vw" quality={92}/>
-        {s.mobile && <Image className="hs-mob" src={s.mobile} alt={alt} title={s.imageTitle || undefined} fill priority={k === 0} sizes="100vw" quality={92}/>}
+        {s.mobile ? <HeroPicture desk={s.image} mob={s.mobile} alt={alt} title={s.imageTitle} first={k === 0}/>
+          : <Image src={s.image} alt={alt} title={s.imageTitle || undefined} fill priority={k === 0} sizes="100vw" quality={92}/>}
         {text && <div className="hero-copy">{s.eyebrow && <p className="eyebrow">{s.eyebrow}</p>}{k === 0 ? <h1>{lines(s.title)}</h1> : <h2 className="hero-h">{lines(s.title)}</h2>}
           {s.subtitle && <p>{s.subtitle}</p>}{s.button && <span className="button">{s.button.label} <ArrowRight size={16}/></span>}</div>}
       </>;

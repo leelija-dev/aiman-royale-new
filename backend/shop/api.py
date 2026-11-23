@@ -272,14 +272,20 @@ def products(request,slug=None):
     q=q.distinct().order_by(order,'id')
     count=q.count()
     return Response({'count':count,'page':page,'pages':max(1,(count+11)//12),'results':ProductSerializer(q[(page-1)*12:page*12],many=True).data})
+def plain_text(value):
+    import html as _html
+    v=re.sub(r'</?(p|br|li|ul|ol|h[1-6]|div)\b[^>]*>',' ',value or '',flags=re.I)  # block tags -> space
+    return re.sub(r'\s+',' ',_html.unescape(re.sub(r'<[^>]+>','',v))).strip()
 def category_content(c):
     """Text for a category page: the collection's own text, else Site settings defaults. {name} -> collection name."""
+    from .richtext import clean_html
     s=SiteSettings.current()
     fill=lambda t:(t or '').replace('{name}',c.name)
     def entries(kind):
         own=c.questions.filter(kind=kind,active=True)
         rows=own if own.exists() else PageQuestion.objects.filter(collection__isnull=True,kind=kind,active=True)
-        return [{'question':fill(r.question),'answer':fill(r.answer)} for r in rows]
+        # 'answer' stays plain text (FAQ schema, older frontends); 'html' is the formatted answer from the admin editor.
+        return [{'question':fill(r.question),'answer':plain_text(clean_html(fill(r.answer))),'html':clean_html(fill(r.answer))} for r in rows]
     return {'eyebrow':fill(c.hero_eyebrow or 'The {name} Edit'),
             'tagline':fill(c.hero_tagline or s.category_tagline),
             'seo_heading':fill(c.seo_heading or s.category_seo_heading),
@@ -401,13 +407,7 @@ def cart(request):
         measurements=request.data.get('measurements') or {}
         if measurements:
             if not v.product.custom_fit:raise ValidationError('Custom fitting is not available for this product.')
-            if set(measurements)-{'bust','waist','hip','armhole','unit'}:raise ValidationError('Invalid measurements.')
-            try:
-                for k in ['bust','waist','hip','armhole']:
-                    value=float(measurements[k])
-                    if not 5<=value<=250:raise ValueError()
-                if measurements.get('unit') not in ['cm','in']:raise ValueError()
-            except (ValueError,TypeError,KeyError):raise ValidationError('Enter all measurements and a valid unit.')
+            measurements=clean_fit(measurements)
         existing=c.items.filter(variant=v).first();total=qty+(existing.quantity if existing else 0)
         if qty<1 or total>v.stock:raise ValidationError(f'Only {v.stock} left in this size.' if v.stock else 'This size is out of stock.')
         CartItem.objects.update_or_create(cart=c,variant=v,defaults={'quantity':total,'measurements':measurements})
@@ -421,6 +421,12 @@ def cart(request):
             i.quantity=q;i.save()
     items=list(c.items.select_related('variant__product').prefetch_related('variant__product__images'))
     return Response({'items':[{'id':i.pk,'variant':VariantSerializer(i.variant).data,'product':ProductSerializer(i.variant.product).data,'quantity':i.quantity,'measurements':i.measurements} for i in items],'subtotal':str(sum((i.variant.product.price*i.quantity for i in items),Decimal(0)))})
+@api_view(['GET'])
+def wishlist_ids(request):
+    """Saved product ids for the hearts on product cards. Visitors who are not signed in get an empty list
+    (200, not 403), so a page of cards makes one quiet request instead of an error per heart."""
+    if not request.user.is_authenticated:return Response({'signed_in':False,'ids':[]})
+    return Response({'signed_in':True,'ids':list(Wishlist.objects.filter(user=request.user,product__active=True).values_list('product_id',flat=True))})
 @api_view(['GET','POST','DELETE'])
 @permission_classes([IsAuthenticated])
 def wishlist(request):
@@ -732,6 +738,29 @@ def custom_data(r):
 
 MEASURE_KEYS=['bust','waist','hip','armhole']
 OPTIONAL_MEASURES=['shoulder','height','sleeve','top_length','bottom_length','blouse_length']
+DESIGN_OPTIONS=('neckline','back','colour','extra')
+def clean_fit(m):
+    """Custom measurements on a bag line (bought straight away, at the product price): bust, waist, hip and armhole
+    are required; extra measurements and design notes from the Customize popup are optional."""
+    if not isinstance(m,dict):raise ValidationError('Invalid measurements.')
+    if set(m)-set(MEASURE_KEYS+OPTIONAL_MEASURES)-{'unit','options'}:raise ValidationError('Invalid measurements.')
+    if m.get('unit') not in ('cm','in'):raise ValidationError('Choose inches or cm.')
+    clean={}
+    for k in MEASURE_KEYS+OPTIONAL_MEASURES:
+        val=m.get(k);name=k.replace('_',' ')
+        if val in (None,''):
+            if k in MEASURE_KEYS:raise ValidationError(f'Enter your {name} measurement.')
+            continue
+        try:val=round(float(val),2)
+        except (TypeError,ValueError):raise ValidationError(f'Enter a number for {name}.')
+        if not 1<=val<=300:raise ValidationError(f'Check the {name} measurement.')
+        clean[k]=val
+    clean['unit']=m['unit']
+    o=m.get('options') or {}
+    if not isinstance(o,dict):raise ValidationError('Invalid design options.')
+    opts={k:str(o.get(k,'') or '').strip()[:500] for k in DESIGN_OPTIONS if str(o.get(k,'') or '').strip()}
+    if opts:clean['options']=opts
+    return clean
 @api_view(['GET','POST'])
 @permission_classes([IsAuthenticated])
 def custom_requests(request):

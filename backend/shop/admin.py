@@ -59,18 +59,27 @@ class ProductAdmin(admin.ModelAdmin):
         for n,f in enumerate(files):ProductImage.objects.create(product=p,image=f,alt=p.name,position=start+n)
         if files:self.message_user(request,f'{len(files)} photo(s) added to {p.name}.')
     list_display=['name','price','active','featured'];list_filter=['active','featured','collections','occasions'];search_fields=['name','slug'];prepopulated_fields={'slug':('name',)};filter_horizontal=['collections','occasions'];inlines=[ImageInline,VariantInline,ProductFAQInline]
-class PageQuestionInline(admin.TabularInline):
-    model=PageQuestion;extra=1;fields=['kind','question','answer','sort_order','active'];verbose_name_plural='FAQs & guide entries for this category (leave empty to use the defaults)'
+class RichTextarea(forms.Textarea):
+    """Classic editor (toolbar: headings, bold, italic, lists, links, HTML view). Saved HTML is cleaned on the server."""
+    def __init__(self,attrs=None):super().__init__({'class':'ar-rich','rows':10,**(attrs or {})})
+    class Media:
+        js=['shop/rich-editor.js'];css={'all':['shop/rich-editor.css']}
+class PageQuestionForm(forms.ModelForm):
+    class Meta:model=PageQuestion;fields='__all__';widgets={'answer':RichTextarea()}
+class PageQuestionInline(admin.StackedInline):
+    model=PageQuestion;form=PageQuestionForm;extra=0;fields=[('kind','sort_order','active'),'question','answer'];verbose_name_plural='FAQs for this category ("A little guidance" — leave empty to use the defaults)'
+class CollectionForm(forms.ModelForm):
+    class Meta:model=Collection;fields='__all__';widgets={'details':RichTextarea({'rows':16})}
 @admin.register(Collection)
 class CollectionAdmin(admin.ModelAdmin):
-    prepopulated_fields={'slug':('name',)};list_display=['name','parent','sort_order','active'];list_editable=['parent','sort_order','active'];list_filter=['parent'];inlines=[PageQuestionInline]
+    form=CollectionForm;prepopulated_fields={'slug':('name',)};list_display=['name','parent','sort_order','active'];list_editable=['parent','sort_order','active'];list_filter=['parent'];inlines=[PageQuestionInline]
     fieldsets=((None,{'fields':('name','slug','parent','sort_order','description','image','active')}),
                ('SEO',{'fields':('seo_title','seo_description','schema_json')}),
-               ('Category page text (leave blank to use the defaults in Site settings; {name} = collection name)',{'fields':('hero_eyebrow','hero_tagline','seo_heading','seo_body')}),
+               ('Category page text (leave blank to use the defaults in Site settings; {name} = collection name)',{'fields':('hero_tagline',)}),
                ('Category details (bottom of page, with Read more)',{'fields':('details',)}))
 @admin.register(PageQuestion)
 class PageQuestionAdmin(admin.ModelAdmin):
-    list_display=['question','kind','collection','sort_order','active'];list_filter=['kind','collection','active'];list_editable=['sort_order','active'];search_fields=['question','answer']
+    form=PageQuestionForm;list_display=['question','kind','collection','sort_order','active'];list_filter=['kind','collection','active'];list_editable=['sort_order','active'];search_fields=['question','answer']
 @admin.register(Customer)
 class CustomerAdmin(UserAdmin):
     fieldsets=UserAdmin.fieldsets+ (('WhatsApp',{'fields':('phone','marketing_opt_in')}),)

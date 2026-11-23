@@ -216,9 +216,23 @@ class CategoryContentTests(TestCase):
         s=SiteSettings.current();s.fitting_button='Book Now';s.save()
         d=self.client.get('/api/collections/gown-x/').json()['content']
         self.assertEqual(d['tagline'],'Made for evenings');self.assertEqual(d['seo_heading'],'Designer Gowns')
-        self.assertEqual(d['faqs'],[{'question':'Is lining included?','answer':'Yes.'}])
+        self.assertEqual(d['faqs'],[{'question':'Is lining included?','answer':'Yes.','html':'<p>Yes.</p>'}])
         self.assertEqual(len(d['guides']),3)
         self.assertEqual(d['fitting']['button'],'Book Now')
+
+    def test_faq_answer_from_classic_editor_is_cleaned(self):
+        from shop.models import Collection, PageQuestion
+        c=Collection.objects.create(name='Gown',slug='gown-y')
+        PageQuestion.objects.create(collection=c,kind='faq',question='Care?',answer='<p>Dry clean <strong>only</strong>.</p><script>x()</script><ul><li>No bleach</li></ul>')
+        f=self.client.get('/api/collections/gown-y/').json()['content']['faqs'][0]
+        self.assertEqual(f['html'],'<p>Dry clean <strong>only</strong>.</p><ul><li>No bleach</li></ul>')
+        self.assertEqual(f['answer'],'Dry clean only. No bleach')
+
+    def test_collection_admin_uses_classic_editor(self):
+        from shop.admin import CollectionForm, PageQuestionForm
+        for form,field in ((CollectionForm(),'details'),(PageQuestionForm(),'answer')):
+            self.assertIn('class="ar-rich"',str(form[field]))
+            self.assertIn('shop/rich-editor.js',form.media._js)
 
 
 class HomepageTests(TestCase):
@@ -909,3 +923,33 @@ class CustomSchemaTests(TestCase):
         self.assertEqual(APIClient().get('/api/pages/faq-x/').data['schema'],[{'@type':'FAQPage'}])
         s=SiteSettings.current();s.schema_json='{"@type":"Organization"}';s.save();cache.clear()
         self.assertEqual(APIClient().get('/api/site/').data['schema'],[{'@type':'Organization'}])
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'])
+class CustomFitBagTests(TestCase):
+    """Custom Measurements can go straight into the bag (Add to Cart / Buy Now) with the popup's details."""
+    def setUp(self):
+        cache.clear()
+        self.p=Product.objects.create(name='Rani Suit',slug='rani-suit-b',price='5000',mrp='8000',custom_fit=True)
+        self.v=Variant.objects.create(product=self.p,sku='RB-M',size='M',colour='Rani',stock=3)
+        self.c=APIClient()
+    def test_measurements_and_design_notes_saved_on_bag_line(self):
+        m={'bust':'36','waist':'30.5','hip':'38','armhole':'16','sleeve':'18','unit':'in','options':{'neckline':'Deep V','extra':'','evil':'x'}}
+        r=self.c.post('/api/cart/',{'variant':self.v.id,'quantity':1,'measurements':m},format='json')
+        self.assertEqual(r.status_code,200,r.data)
+        self.assertEqual(r.data['items'][0]['measurements'],{'bust':36.0,'waist':30.5,'hip':38.0,'armhole':16.0,'sleeve':18.0,'unit':'in','options':{'neckline':'Deep V'}})
+    def test_main_measurements_required(self):
+        r=self.c.post('/api/cart/',{'variant':self.v.id,'quantity':1,'measurements':{'bust':36,'unit':'in'}},format='json')
+        self.assertEqual(r.status_code,400);self.assertIn('waist',str(r.data))
+        r=self.c.post('/api/cart/',{'variant':self.v.id,'quantity':1,'measurements':{'bust':36,'waist':30,'hip':38,'armhole':16,'unit':'in','neck':'1'}},format='json')
+        self.assertEqual(r.status_code,400)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False,ALLOWED_HOSTS=['testserver'])
+class WishlistIdsTests(TestCase):
+    def test_guest_gets_empty_list_and_member_gets_ids(self):
+        r=APIClient().get('/api/wishlist/ids/');self.assertEqual(r.status_code,200);self.assertEqual(r.data,{'signed_in':False,'ids':[]})
+        u=Customer.objects.create_user(username='w@example.com',email='w@example.com',password='Test-Password-910!')
+        p=Product.objects.create(name='Gown',slug='gown-w',price='5000',mrp='5000')
+        c=APIClient();c.force_login(u);c.post('/api/wishlist/',{'product':p.id},format='json')
+        self.assertEqual(c.get('/api/wishlist/ids/').data,{'signed_in':True,'ids':[p.id]})

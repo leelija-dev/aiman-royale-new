@@ -1,7 +1,7 @@
 'use client';
 import Image from 'next/image';
 import Link from 'next/link';
-import {useEffect, useRef, useState} from 'react';
+import {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {ArrowLeft, ArrowRight, ChevronRight, Landmark, Banknote, CreditCard, Headphones, Phone, Mail, TicketPercent, CheckCircle2, Lock} from 'lucide-react';
 import {api, bagChanged, err} from '@/lib/client';
@@ -65,7 +65,15 @@ export function CheckoutPage({site}: {site: Site}) {
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [order, setOrder] = useState<Order | null>(null), [key, setKey] = useState('');
   // Order placed: show the confirmation from the top of the page (it is much shorter than the checkout form).
   const doneRef = useRef<HTMLElement>(null), placed = !!order && ['paid', 'cod', 'processing', 'shipped', 'delivered'].includes(order.status);
-  useEffect(() => { if (placed) { window.scrollTo({top: 0, behavior: 'auto'}); doneRef.current?.focus({preventScroll: true}); } }, [placed]);
+  // Jump instantly, before the browser paints the short page: a smooth scroll (the site sets scroll-behavior:smooth)
+  // gets cut short when the long form disappears and the browser then clamps to the bottom, showing the footer.
+  useLayoutEffect(() => {
+    if (!placed) return;
+    const top = () => { window.scrollTo({top: 0, left: 0, behavior: 'instant' as ScrollBehavior}); };
+    top(); doneRef.current?.focus({preventScroll: true});
+    const a = requestAnimationFrame(top), t = setTimeout(top, 350);
+    return () => { cancelAnimationFrame(a); clearTimeout(t); };
+  }, [placed]);
 
   useEffect(() => {
     setKey(crypto.randomUUID());

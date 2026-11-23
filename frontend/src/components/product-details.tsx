@@ -15,7 +15,6 @@ import {CustomizeModal, type CustomPayload} from '@/components/customize-modal';
 
 type Popup = {ok: true; title: string; detail: string; image: string} | {ok: false; title: string; detail: string};
 type Reviews = {average: number | null; count: number; reviews: {name: string; rating: number; text: string; date: string}[]};
-const FIELDS = ['bust', 'waist', 'hip', 'armhole'] as const;
 
 function WhatsAppIcon() {
   return <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.8-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z"/></svg>;
@@ -32,7 +31,8 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
   const variant = p.variants.find(v => v.id === variantId && v.colour === colour);
   const [image, setImage] = useState(0), [zoom, setZoom] = useState(false);
   const [qty, setQty] = useState(1), [type, setType] = useState<'stitched' | 'custom'>('stitched');
-  const [m, setM] = useState<Record<string, string>>({unit: 'cm', bust: '', waist: '', hip: '', armhole: ''}), [mSaved, setMSaved] = useState(false), [mMsg, setMMsg] = useState('');
+  // Custom Measurements saved from the Customize popup; they go into the bag with this item.
+  const [fit, setFit] = useState<CustomPayload | null>(null);
   const [busy, setBusy] = useState<'' | 'bag' | 'buy'>(''), [popup, setPopup] = useState<Popup | null>(null), [note, setNote] = useState('');
   const [saved, toggleWish] = useWishlist(p.id);
   const [inBag, setInBag] = useState<Set<number>>(new Set());
@@ -78,16 +78,12 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
   /** Puts the selection in the bag. Returns the bag item id (or 0 and shows why) — Buy Now checks out just that item. */
   async function addToBag(buyNow = false): Promise<number> {
     if (!variant || !variant.stock) { setPopup({ok: false, title: 'Please choose a size', detail: 'Select an available size before adding this style to your bag.'}); return 0; }
-    if (type === 'custom' && !mSaved) {
-      setPopup({ok: false, title: 'Add your measurements', detail: 'You chose Custom Measurements. Enter and save your measurements below, or choose Stitched.'});
-      measureRef.current?.scrollIntoView({behavior: 'smooth', block: 'center'});
-      return 0;
-    }
+    if (type === 'custom' && !fit) { setCustomize(true); return 0; }
     try {
       // Buy Now: if this exact size/colour is already in the bag, set its quantity instead of adding more.
       const existing = buyNow ? (await api<Bag>('cart/')).items.find(i => i.variant.id === variant.id) : undefined;
       if (existing && type !== 'custom') await api('cart/', 'PATCH', {id: existing.id, quantity: qty});
-      else await api('cart/', 'POST', {variant: variant.id, quantity: qty, measurements: type === 'custom' ? m : {}});
+      else await api('cart/', 'POST', {variant: variant.id, quantity: qty, measurements: type === 'custom' && fit ? {...fit.m, ...(Object.keys(fit.options).length ? {options: fit.options} : {})} : {}});
       bagChanged();
       const bag = await api<Bag>('cart/');
       setInBag(new Set(bag.items.map(i => i.variant.id)));
@@ -117,12 +113,12 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
   useEffect(() => {
     let d: (CustomPayload & {slug: string}) | null = null;
     try { d = JSON.parse(localStorage.getItem(CUSTOM_DRAFT) || 'null'); } catch {}
-    if (d && d.slug === p.slug && d.m) { setType('custom'); api<{user: unknown}>('auth/me/').then(r => { if (r.user) sendCustom(d!); }).catch(() => {}); }
+    if (d && d.slug === p.slug && d.m) { api<{user: unknown}>('auth/me/').then(r => { if (r.user) sendCustom(d!); }).catch(() => {}); }
   }, [p.slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function onAdd() {
     setBusy('bag');
-    if (await addToBag()) setPopup({ok: true, title: 'Added to your bag', detail: `${p.name} · Size ${variant!.size} · ${colour} · Qty ${qty}`, image: images[0].url});
+    if (await addToBag()) setPopup({ok: true, title: 'Added to your bag', detail: `${p.name} · Size ${variant!.size} · ${colour} · Qty ${qty}${type === 'custom' ? ' · Custom measurements' : ''}`, image: images[0].url});
     setBusy('');
   }
 
@@ -148,11 +144,13 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
     } catch (e) { setNote(err(e)); }
   }
 
-  function saveMeasurements() {
-    const bad = FIELDS.find(k => { const n = Number(m[k]); return !m[k] || !(n >= 5 && n <= 250); });
-    if (bad) { setMMsg(`Please enter your ${bad} (between 5 and 250 ${m.unit}).`); return; }
-    setMSaved(true); setType('custom'); setMMsg('Saved. These measurements will be added to this style when you add it to your bag.');
+  /** Customize popup → "Save & Continue": keep the measurements, pick that size, and show Add to Cart / Buy Now. */
+  function saveFit(d: CustomPayload) {
+    setFit(d); setType('custom'); setCustomize(false);
+    const v = p.variants.find(x => x.id === d.variant);
+    if (v) { if (v.colour !== colour) setColour(v.colour); setVariantId(v.id); }
   }
+  const fitText = fit ? `${Object.entries(fit.m).filter(([k]) => k !== 'unit').map(([k, v]) => `${k[0].toUpperCase()}${k.slice(1).replace('_', ' ')} ${v}`).join(' · ')} ${fit.m.unit}` : '';
 
   const origin = pageUrl ? new URL(pageUrl).origin : '';
   const absImage = images[image]?.url ? (images[image].url.startsWith('http') ? images[image].url : origin + images[image].url) : '';
@@ -161,7 +159,7 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
     `*${p.name}*`,
     `Price: ${money(Number(p.price) * qty)}${off > 0 ? ` (MRP ${money(Number(p.mrp) * qty)}, ${off}% off)` : ''}${qty > 1 ? ` for ${qty} pieces` : ''}`,
     `Size: ${variant?.size || 'not selected'} · Colour: ${colour} · Qty: ${qty}`,
-    `Type: ${type === 'custom' ? `Custom measurements${mSaved ? ` (bust ${m.bust}, waist ${m.waist}, hip ${m.hip}, armhole ${m.armhole} ${m.unit})` : ''}` : 'Stitched'}`,
+    `Type: ${type === 'custom' ? `Custom measurements${fit ? ` (${fitText})` : ''}` : 'Stitched'}`,
     absImage && `Photo: ${absImage}`,
     `Product link: ${pageUrl}`,
   ].filter(Boolean).join('\n');
@@ -179,9 +177,7 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
   }, []);
   // Remember this product for "Recently Viewed".
   useEffect(() => { rememberViewed({slug: p.slug, name: p.name, price: p.price, mrp: p.mrp, image: images[0]?.url || ''}); }, [p.slug]); // eslint-disable-line react-hooks/exhaustive-deps
-  const addButton = (cls = '') => type === 'custom'
-    ? <button type="button" className={`pd-btn pd-btn-bag ${cls}`} disabled={!!busy} onClick={() => setCustomize(true)}><Ruler size={18}/>Customize &amp; Send Request</button>
-    : variantInBag ? <Link href="/cart" className={`pd-btn pd-btn-bag pd-go-bag ${cls}`}><ShoppingBag size={18}/>Go to Bag <ArrowRight size={16}/></Link>
+  const addButton = (cls = '') => variantInBag && type !== 'custom' ? <Link href="/cart" className={`pd-btn pd-btn-bag pd-go-bag ${cls}`}><ShoppingBag size={18}/>Go to Bag <ArrowRight size={16}/></Link>
     : <button type="button" className={`pd-btn pd-btn-bag ${cls}`} disabled={!!busy} onClick={onAdd}>{busy === 'bag' ? 'Adding…' : 'Add To Cart'}</button>;
 
   return <>
@@ -204,7 +200,9 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
 
         {p.custom_fit && <div className="az-block"><p className="pd-label">Select Type</p>
           <div className="pd-options"><button type="button" className={type === 'stitched' ? 'on' : ''} aria-pressed={type === 'stitched'} onClick={() => setType('stitched')}>Stitched</button>
-            <button type="button" className={type === 'custom' ? 'on' : ''} aria-pressed={type === 'custom'} onClick={() => { setType('custom'); setCustomize(true); }}>Custom Measurements</button></div></div>}
+            <button type="button" className={type === 'custom' ? 'on' : ''} aria-pressed={type === 'custom'} onClick={() => { if (fit) setType('custom'); else setCustomize(true); }}>Custom Measurements</button></div>
+          {type === 'custom' && fit && <div className="pd-fit-summary"><Ruler size={16}/><span><strong>Your measurements</strong>{fitText}{Object.keys(fit.options).length > 0 && <small>Design changes: {Object.values(fit.options).join(' · ')}</small>}</span>
+            <button type="button" onClick={() => setCustomize(true)}>Edit</button></div>}</div>}
 
         <div className="az-block">
           <div className="pd-row"><p className="pd-label">Select size</p><Link href="/info/size-guide" className="pd-size-guide"><Ruler size={15}/> Size guide</Link></div>
@@ -217,8 +215,8 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
           {addButton()}
           <a className="pd-btn az-stylist" href={stylistHref} target={digits ? '_blank' : undefined} rel="noopener noreferrer">Speak To Stylist</a>
         </div>
-        {type === 'custom' ? <p className="pd-custom-note">Our team checks your measurements and confirms the price. You pay once it’s accepted — from My Account → Custom Requests.</p>
-          : <button type="button" className="pd-btn az-buy" disabled={!!busy} onClick={onBuyNow}>{busy === 'buy' ? 'Please wait…' : <>Buy Now <ArrowRight size={17}/></>}</button>}
+        <button type="button" className="pd-btn az-buy" disabled={!!busy} onClick={onBuyNow}>{busy === 'buy' ? 'Please wait…' : <>Buy Now <ArrowRight size={17}/></>}</button>
+        {type === 'custom' && <p className="pd-custom-note">Made to your measurements — allow at least 7 extra working days.</p>}
         <div className="az-minor">
           <button type="button" className={saved ? 'on' : ''} aria-pressed={saved} onClick={onWish}><Heart size={17} fill={saved ? 'currentColor' : 'none'}/>{saved ? 'Wishlisted' : 'Add to Wishlist'}</button>
           <a href={waHref} target="_blank" rel="noopener noreferrer"><WhatsAppIcon/>Order on WhatsApp</a>
@@ -261,10 +259,10 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
     </div>
 
     {p.custom_fit && <div className="pd-measure pd-measure-cta" ref={measureRef} id="measurements">
-      <div><h2>Custom Measurements option</h2><p>Made personal, with your measurements — choose a size, add your measurements and design changes. Our team confirms the price before you pay.</p></div>
-      <button type="button" className="pd-btn pd-btn-bag" onClick={() => { setType('custom'); setCustomize(true); }}><Ruler size={17}/> Customize this outfit</button>
+      <div><h2>Custom Measurements option</h2><p>Made personal, with your measurements — choose a size, add your measurements and design changes, then add it to your bag or buy now.</p></div>
+      <button type="button" className="pd-btn pd-btn-bag" onClick={() => setCustomize(true)}><Ruler size={17}/> Customize this outfit</button>
     </div>}
-    {customize && <CustomizeModal p={p} phone={phone} colour={colour} busy={busy === 'bag'} onClose={() => setCustomize(false)} onSend={sendCustom}/>}
+    {customize && <CustomizeModal p={p} phone={phone} colour={colour} busy={busy === 'bag'} initial={fit} current={variant?.id} onClose={() => setCustomize(false)} onSave={saveFit} onSend={sendCustom}/>}
 
     <ReviewsBlock slug={p.slug} section/>
 
@@ -272,9 +270,7 @@ export function ProductDetails({product: p, phone, deliveryMessage, swatches = {
       <div className="az-bar-in">
         <Image src={images[0].url} alt="" width={40} height={54}/>
         <div className="az-bar-txt"><strong>Aiman Royale</strong><span>{p.name}</span></div>
-        {type === 'custom'
-          ? <button type="button" className="az-bar-btn" disabled={!!busy} onClick={() => setCustomize(true)}><Ruler size={18}/>Customize</button>
-          : <button type="button" className="az-bar-btn" disabled={!!busy} onClick={onBuyNow}><ShoppingBag size={18}/>{busy === 'buy' ? 'Please wait…' : 'Buy Now'}</button>}
+        <button type="button" className="az-bar-btn" disabled={!!busy} onClick={onBuyNow}><ShoppingBag size={18}/>{busy === 'buy' ? 'Please wait…' : 'Buy Now'}</button>
       </div>
     </div>
 

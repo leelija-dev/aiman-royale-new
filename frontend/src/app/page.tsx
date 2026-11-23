@@ -76,7 +76,7 @@ function render(s: Section, products: Record<number, ProductPage>, sizeGuide: Si
       return <Wrap><section className="lh-conf">
         <div className="lh-conf-copy">{s.title && <h2>{s.title}</h2>}{s.text && <p>{s.text}</p>}
           <ul>{bullets.map(x => <li key={x.title}><Check size={13}/>{x.title}</li>)}</ul></div>
-        {tiles.length > 0 && <div className="lh-conf-art">{tiles.map((x, k) => <Link key={x.title} href={x.href || '/products'} className={`t${k}`} aria-label={x.title}><Image src={x.image} alt="" fill sizes="160px"/>{x.label && <em>{x.label}</em>}</Link>)}
+        {tiles.length > 0 && <div className="lh-conf-art">{tiles.map((x, k) => <Link key={x.title} href={x.href || '/products'} className={`t${k}`}><Image src={x.image} alt={x.title} fill sizes="160px"/>{x.label && <em>{x.label}</em>}</Link>)}
           {s.eyebrow && <div className="lh-conf-pill"><span>{tiles.slice(0, 2).map(x => <Image key={x.title} src={x.image} alt="" width={26} height={26}/>)}</span><div><b>{s.eyebrow}</b><small>{tiles.length}+ stunning designs</small></div><ArrowRight size={14}/></div>}</div>}
         {(s.subtitle || s.button) && <div className="lh-conf-cta">{s.subtitle && <h3>{s.subtitle}</h3>}{s.button && <Link className="lh-grad-btn" href={s.button.href}><ShoppingBag size={16}/> {s.button.label}</Link>}</div>}
       </section></Wrap>;
@@ -88,7 +88,7 @@ function render(s: Section, products: Record<number, ProductPage>, sizeGuide: Si
     case 'banner':
       if (c.length) return <Wrap><section className="lh-sale"><div className="lh-sale-copy">{s.eyebrow && <small>{s.eyebrow}</small>}{s.title && <h2>{lines(s.title)}</h2>}{s.text && <p>{rich(s.text)}</p>}
         {s.button && <Link className="lh-grad-btn square" href={s.button.href}>{s.button.label} <ArrowRight size={14}/></Link>}</div>
-        <Scroller label={s.title}><div className="lh-sale-cards">{c.map(x => <Link key={x.title + x.image} href={x.href || '/products'}><Image src={x.image || IMG} alt={x.title} fill sizes="(max-width:700px) 60vw, 18vw"/><div><h3>{x.title}</h3>{x.caption && <span>{x.caption}</span>}</div></Link>)}</div></Scroller></section></Wrap>;
+        <Scroller label={s.title}><div className="lh-sale-cards">{c.map(x => <Link key={x.title + x.image} href={x.href || '/products'}><Image src={x.image || IMG} alt={x.title} fill sizes="(max-width:700px) 44vw, 18vw"/><div><h3>{x.title}</h3>{x.caption && <span>{x.caption}</span>}</div></Link>)}</div></Scroller></section></Wrap>;
       return <section className="home-sale">{s.image && <Image src={s.image} alt="" fill sizes="100vw"/>}<div>{s.eyebrow && <p>{s.eyebrow}</p>}{s.title && <h2>{s.title}</h2>}{s.text && <p>{rich(s.text)}</p>}
         {s.button && <Link className="button outline" href={s.button.href}>{s.button.label}</Link>}</div></section>;
     case 'strip':
